@@ -35,6 +35,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # docs/implementation-plan.md §2 の初期スコープパッケージ
+  camera: ^0.11.0
+  video_player: ^2.9.0
+  path_provider: ^2.1.0
+  permission_handler: ^11.3.0
+  flutter_riverpod: ^2.6.0
+  riverpod_annotation: ^2.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -45,6 +53,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # docs/implementation-plan.md §2 のコード生成ツール
+  riverpod_generator: ^2.6.0
+  build_runner: ^2.4.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
