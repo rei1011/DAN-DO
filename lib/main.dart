@@ -1,6 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:io';
 
-import 'game.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart';
+
+import 'summary.dart';
 
 void main() {
   runApp(const MainApp());
@@ -11,86 +15,82 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: Align(alignment: Alignment.centerLeft, child: Text('Birdle')),
-        ),
-        body: Center(child: GamePage()),
-      ),
+    return MaterialApp(home: ArticleView());
+  }
+}
+
+class ArticleView extends StatefulWidget {
+  const ArticleView({super.key});
+
+  @override
+  State<ArticleView> createState() => _ArticleViewState();
+}
+
+class _ArticleViewState extends State<ArticleView> {
+  final ArticleViewModel viewModel = ArticleViewModel(ArticleModel());
+
+  @override
+  void initState() {
+    super.initState();
+    viewModel.fetchArticle();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Wikipedia Flutter')),
+      body: ArticleBody(viewModel: viewModel),
     );
   }
 }
 
-class Tile extends StatelessWidget {
-  const Tile(this.letter, this.hitType, {super.key});
+class ArticleBody extends StatelessWidget {
+  const ArticleBody({super.key, required this.viewModel});
 
-  final String letter;
-  final HitType hitType;
+  final ArticleViewModel viewModel;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: Duration(milliseconds: 500),
-      curve: Curves.bounceIn,
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        color: switch (hitType) {
-          HitType.hit => Colors.green,
-          HitType.partial => Colors.yellow,
-          HitType.miss => Colors.grey,
-          _ => Colors.white,
-        },
-      ),
-      child: Center(
-        child: Text(
-          letter.toUpperCase(),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-      ),
+    return ListenableBuilder(
+      listenable: viewModel,
+      builder: (context, _) {
+        return switch ((
+          viewModel.isLoading,
+          viewModel.summary,
+          viewModel.error,
+        )) {
+          (true, _, _) => const CircularProgressIndicator(),
+          (_, _, final Exception e) => Text('Error: $e'),
+          (_, final summary?, _) => ArticlePage(
+            summary: summary,
+            nextArticleCallback: viewModel.fetchArticle,
+          ),
+          _ => const Text('Something went wrong!'),
+        };
+      },
     );
   }
 }
 
-class GamePage extends StatefulWidget {
-  GamePage({super.key});
+class ArticlePage extends StatelessWidget {
+  const ArticlePage({
+    super.key,
+    required this.summary,
+    required this.nextArticleCallback,
+  });
 
-  @override
-  State<GamePage> createState() => _GamePageState();
-}
-
-class _GamePageState extends State<GamePage> {
-  final Game _game = Game();
+  final Summary summary;
+  final VoidCallback nextArticleCallback;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
+    return SingleChildScrollView(
       child: Column(
         children: [
-          for (var guess in _game.guesses)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var letter in guess)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 2.5,
-                      vertical: 2.5,
-                    ),
-                    child: Tile(letter.char, letter.type),
-                  ),
-              ],
-            ),
-          GuessInput(
-            onSubmitGuess: (String guess) {
-              if (guess.length != 5 || !_game.isLegalGuess(guess)) return;
-              setState(() {
-                _game.guess(guess);
-              });
-            },
+          ArticleWidget(summary: summary),
+          ElevatedButton(
+            onPressed: nextArticleCallback,
+            child: const Text('Next random article'),
           ),
         ],
       ),
@@ -98,49 +98,75 @@ class _GamePageState extends State<GamePage> {
   }
 }
 
-class GuessInput extends StatelessWidget {
-  GuessInput({super.key, required this.onSubmitGuess});
+class ArticleWidget extends StatelessWidget {
+  const ArticleWidget({super.key, required this.summary});
 
-  final void Function(String) onSubmitGuess;
-
-  final TextEditingController _textEditingController = TextEditingController();
-
-  final FocusNode _focusNode = FocusNode();
-
-  void _onSubmit() {
-    onSubmitGuess(_textEditingController.text);
-    _textEditingController.clear();
-    _focusNode.requestFocus();
-  }
+  final Summary summary;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              maxLength: 5,
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(35)),
-                ),
-              ),
-              controller: _textEditingController,
-              autofocus: true,
-              focusNode: _focusNode,
-              onSubmitted: (_) {
-                _onSubmit();
-              },
-            ),
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        spacing: 10,
+        children: [
+          if (summary.hasImage) Image.network(summary.originalImage!.source),
+          Text(
+            summary.titles.normalized,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.displaySmall,
           ),
-        ),
-        IconButton(
-          onPressed: _onSubmit,
-          icon: const Icon(Icons.arrow_circle_up),
-        ),
-      ],
+          if (summary.description != null)
+            Text(
+              summary.description!,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          Text(summary.extract),
+        ],
+      ),
     );
+  }
+}
+
+class ArticleModel {
+  Future<Summary> getRandomArticleSummary() async {
+    final uri = Uri.https(
+      'en.wikipedia.org',
+      '/api/rest_v1/page/random/summary',
+    );
+    final response = await get(uri);
+
+    if (response.statusCode != 200) {
+      throw const HttpException('Failed to update resource');
+    }
+
+    return Summary.fromJson(jsonDecode(response.body) as Map<String, Object?>);
+  }
+}
+
+class ArticleViewModel extends ChangeNotifier {
+  final ArticleModel model;
+  Summary? summary;
+  Exception? error;
+  bool isLoading = false;
+
+  ArticleViewModel(this.model);
+
+  Future<void> fetchArticle() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      summary = await model.getRandomArticleSummary();
+      print('Article loaded: ${summary!.titles.normalized}');
+      error = null;
+    } on HttpException catch (e) {
+      print('Error loading article: ${e.message}');
+      error = e;
+      summary = null;
+    }
+
+    isLoading = false;
+    notifyListeners();
   }
 }
