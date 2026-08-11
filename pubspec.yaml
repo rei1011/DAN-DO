@@ -41,8 +41,10 @@ dependencies:
   path_provider: ^2.1.0
   permission_handler: ^11.3.0
   flutter_riverpod: ^2.6.0
-  riverpod_annotation: ^2.6.0
+  riverpod_annotation: ^2.6.1
   http: ^1.6.0
+  hooks_riverpod: ^2.6.1
+  flutter_hooks: ^0.21.3+1
 
 dev_dependencies:
   flutter_test:
@@ -56,8 +58,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
   # docs/implementation-plan.md §2 のコード生成ツール
-  riverpod_generator: ^2.6.0
-  build_runner: ^2.4.0
+  riverpod_generator: ^2.6.5
+  build_runner: ^2.5.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
