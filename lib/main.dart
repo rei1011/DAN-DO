@@ -1,16 +1,11 @@
-import 'package:dan_do/screens/adaptive_layout.dart';
 import 'package:flutter/cupertino.dart';
 
-import 'data/contact_group.dart';
-
-final contactGroupsModel = ContactGroupsModel();
-
 void main() {
-  runApp(const RolodexApp());
+  runApp(const MyApp());
 }
 
-class RolodexApp extends StatelessWidget {
-  const RolodexApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +17,7 @@ class RolodexApp extends StatelessWidget {
           darkColor: Color(0xFF1D1D1D),
         ),
       ),
-      home: AdaptiveLayout(),
+      home: Center(child: Text("Loading...")),
     );
   }
 }
