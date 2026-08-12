@@ -19,42 +19,16 @@ class MyApp extends StatelessWidget {
           darkColor: Color(0xFF1D1D1D),
         ),
       ),
-      home: Center(child: ScoreChangeView()),
+      home: Center(child: TickerView()),
     );
   }
 }
 
-class ScoreChangeView extends HookWidget {
-  const ScoreChangeView({super.key});
+class TickerView extends HookWidget {
+  const TickerView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final score = useState(1);
-    final diff = useValueChanged(
-      score.value,
-      (oldScore, _) => score.value - oldScore,
-    );
-    final controller = useTextEditingController();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('score: ${score.value}'),
-        CupertinoTextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-        ),
-        CupertinoButton(
-          onPressed: () {
-            final parsed = int.tryParse(controller.text);
-            if (parsed != null) {
-              score.value = parsed;
-            }
-          },
-          child: const Text('更新'),
-        ),
-        Text('${diff ?? "差分なし"}'),
-      ],
-    );
+    return const Placeholder();
   }
 }
