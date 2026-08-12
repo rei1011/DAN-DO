@@ -40,9 +40,9 @@ dependencies:
   video_player: ^2.9.0
   path_provider: ^2.1.0
   permission_handler: ^11.3.0
-  riverpod_annotation: ^2.6.1
+  riverpod_annotation: ^4.0.3
   http: ^1.6.0
-  hooks_riverpod: ^2.6.1
+  hooks_riverpod: ^3.3.2
   flutter_hooks: ^0.21.3+1
 
 dev_dependencies:
@@ -57,8 +57,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
   # docs/implementation-plan.md §2 のコード生成ツール
-  riverpod_generator: ^2.6.5
-  build_runner: ^2.5.4
+  riverpod_generator: ^4.0.4
+  build_runner: ^2.15.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
