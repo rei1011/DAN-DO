@@ -9,7 +9,7 @@
 - タスクに着手したら `[ ]` → `[x]` にする
 - 各Phase末尾の確認項目まで終わったら次のPhaseへ進む
 - タスクの詳細(コード配置・設計判断の理由など)は元計画の該当セクションを参照
-- 現在のステータス: **Phase 0 未着手**(2026-08-23時点、コード未着手を確認済み)
+- 現在のステータス: **Phase 0 完了、Phase 1 未着手**(2026-08-23時点)
 
 ## 全Phase共通・継続タスク
 
@@ -17,12 +17,12 @@
 
 ## Phase 0: 下地整理
 
-- [ ] `pubspec.yaml` に依存追加: `image_picker`, `get_thumbnail_video`, `ultralytics_yolo`, `fl_chart`(任意)
-- [ ] `lib/main.dart` からriverpod学習用サンプル(`userNameProvider`, `UserNameSwitcherView`)を削除し、実アプリのエントリポイント(`ProviderScope`+`MaterialApp`+`VideoSelectScreen`起点のルーティング)に置き換え
-- [ ] `build_runner` で `main.g.dart` を再生成
-- [ ] `test/score_change_view_test.dart`・`test/widget_test.dart` を削除
-- [ ] `ios/Runner/Info.plist` に `NSPhotoLibraryUsageDescription` を追加
-- [ ] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認
+- [x] `pubspec.yaml` に依存追加: `image_picker`, `get_thumbnail_video`, `ultralytics_yolo`, `fl_chart`(任意)
+- [x] `lib/main.dart` からriverpod学習用サンプル(`userNameProvider`, `UserNameSwitcherView`)を削除し、実アプリのエントリポイント(`ProviderScope`+`MaterialApp`+`VideoSelectScreen`起点のルーティング)に置き換え(`VideoSelectScreen`は`lib/features/video_select/video_select_screen.dart`にプレースホルダーとして新設。実装はPhase 1で行う)
+- [x] `build_runner` で `main.g.dart` を再生成(main.dartにriverpodコード生成対象がなくなったため、`main.g.dart`自体は不要になり削除された)
+- [x] `test/score_change_view_test.dart`・`test/widget_test.dart` を削除(`score_change_view_test.dart`は着手時点で既に存在せず、`widget_test.dart`のみ削除)
+- [x] `ios/Runner/Info.plist` に `NSPhotoLibraryUsageDescription` を追加
+- [x] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認(`No issues found!`)
 
 ## Phase 1: 配線確認(精度度外視)
 
