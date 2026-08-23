@@ -15,8 +15,8 @@
 
 1. **フレーム抽出**: 元々の推奨(ネイティブSwift `AVAssetReader`+Pigeon自作)は行わず、`get_thumbnail_video`(pub.dev, MIT, iOS対応, Dart SDK制約`^3.4.0`, Pub Points140/Likes63/週間DL106k)を採用。老舗`video_thumbnail`(GitHub 907 stars)のフォークでDart3対応済み、Dart3対応版の中では最も実利用実績が大きい。`thumbnailData({video, imageFormat: JPEG, timeMs, quality})`で指定ミリ秒位置のJPEGバイト列を取得できるが、単発フレーム抽出APIのみのためループ呼び出しで連番フレームを取得する(懸念点: 最終更新が21ヶ月前で停滞気味だが、API自体は枯れた機能のみで破壊的変更の影響を受けにくいと判断)
 2. **ML推論**: `ultralytics_yolo`(pub.dev, **AGPL-3.0ライセンス**)を採用。個人開発・学習目的のため気にせず進める方針で合意済み(将来App Store公開時は要再検討)
-3. **モデル入手**: Phase 1は`ultralytics_yolo`公式の汎用COCO学習済みモデル(`yolo11n`、初回自動ダウンロード)の`sports ball`クラスで代用し配線確認する。ゴルフボール特化モデル(Roboflow Universe公開データセット/モデル)への差し替えはPhase 3で行うが、**公開プロジェクトで学習済み重みが直接ダウンロードできるとは限らない**(データセットのみ提供の場合、自分でUltralyticsを使って学習を回す必要が生じる可能性がある)。この点はPhase 3着手時にユーザー自身のブラウザでの確認が必要
-4. **距離推定の前提変更**: 撮影時の `videoFieldOfView` ライブ取得が前提だった数式を、既存動画では使えないため、**標準的なiPhone背面広角カメラの水平画角を固定の仮定値として使う**目安値ベースに変更する
+3. **モデル入手**: Phase 1は`ultralytics_yolo`公式の汎用COCO学習済みモデル(`yolo11n`、初回自動ダウンロード)の`sports ball`クラスで代用し配線確認する。ゴルフボール特化モデル(Roboflow Universe公開データセット/モデル)への差し替えはPhase 3で行うが、**公開プロジェクトで学習済み重みが直接ダウンロードできるとは限らない**(データセットのみ提供の場合がある)。この点はPhase 3着手時にユーザー自身のブラウザでの確認が必要だが、**重みが直接入手できない場合、自前学習(Ultralyticsでの学習)は今回のスコープ外とし、Phase 1と同じCOCO汎用`sports ball`クラスのまま妥協する**(精度向上はPhase 4以降に先送り)
+4. **距離推定の前提変更**: 撮影時の `videoFieldOfView` ライブ取得が前提だった数式を、既存動画では使えないため、**固定の仮定画角**を使う目安値ベースに変更する。対象機種は**iPhone 17(ベースモデル)・縦向き撮影**を前提とする。Appleの公式スペック(メインカメラ26mm相当)からフルサイズ換算で逆算すると、横向き基準の水平画角は約69.4°になるが、**センサーは物理的に横向き固定のため、縦向き撮影で回転後のフレーム幅とペアリングすべきは狭い軸側の約49.6°**であり、69.4°をそのまま使うと距離推定が体系的にずれる(調査で判明・裏取り済み)。16:9クロップ等でさらに誤差が残るため、この49.6°はあくまで初期値とし、開発中は算出結果と実測値の比較を随時行って妥当性を確認する
 
 ## 画面構成
 
@@ -27,9 +27,9 @@ VideoSelectScreen  →  AnalyzingScreen  →  ResultScreen
 (旧CaptureScreen)     (エラー分岐を強化)   (弾道オーバーレイ追加)
 ```
 
-- **VideoSelectScreen** (`lib/features/video_select/video_select_screen.dart`): `image_picker`の`pickVideo(source: ImageSource.gallery)`で動画選択。`camera`パッケージのプレビューは撤去(pubspec上は残置、将来の撮影機能復活用)
+- **VideoSelectScreen** (`lib/features/video_select/video_select_screen.dart`): `image_picker`の`pickVideo(source: ImageSource.gallery)`で動画選択。選択直後に動画の長さを取得し、**1分を超える場合はバリデーションエラーとして再選択を促す**(長尺動画によるフレーム抽出の異常な遅延を防ぐ簡易ガード)。`camera`パッケージのプレビューは撤去(pubspec上は残置、将来の撮影機能復活用)
 - **AnalyzingScreen** (`lib/features/analyzing/analyzing_screen.dart`): 本実装は失敗しうる(ボール未検出等)ため、`AsyncValue.error`分岐で「別の動画を選ぶ」ボタンを表示しVideoSelectScreenへ戻す
-- **ResultScreen** (`lib/features/result/result_screen.dart`): `video_player`再生+数値表示に加え、弾道オーバーレイ(`CustomPainter`、実測=実線/シミュレーション=破線)を追加。俯瞰チャート(`fl_chart`)は任意
+- **ResultScreen** (`lib/features/result/result_screen.dart`): `video_player`再生+数値表示に加え、弾道オーバーレイ(`CustomPainter`)を追加。実測区間とシミュレーション区間は線種(実線/破線等)で視覚的に区別せず一律描画とする(データモデル上の`isMeasured`は保持するが、UI描画では未使用)。飛距離・打ち出し角度などの数値表示には、仮定FOVによる目安値であることを示す精度注記(例:「目安値」)を添える。俯瞰チャート(`fl_chart`)は任意
 
 前提: ユーザーが選ぶ動画はスイング全体を程よくトリミングした数秒のクリップとする(長尺動画からのスイング区間自動検出はスコープ外)。
 
@@ -42,7 +42,7 @@ lib/
   core/
     ball_constants.dart              # ボール直径0.0427m、重力等
     ballistics_constants.dart        # 抗力係数・揚力係数のヒューリスティック
-    assumed_camera_intrinsics.dart   # 仮定FOV定数(将来: 機種別FOVテーブルへ拡張)
+    assumed_camera_intrinsics.dart   # 仮定FOV定数(iPhone 17縦向き想定、約49.6°。将来: 機種別FOVテーブルへ拡張)
 
   features/
     video_select/video_select_screen.dart
@@ -51,14 +51,14 @@ lib/
       analysis_controller.dart       # @riverpod class、ShotAnalysisServiceを呼ぶ薄いオーケストレーション
     result/
       result_screen.dart
-      trajectory_painter.dart        # CustomPainter(Phase 3)
+      trajectory_painter.dart        # CustomPainter(Phase 3、実測/シミュレーションを線種で区別しない一律描画)
       trajectory_chart.dart          # fl_chartラッパー(Phase 3, 任意)
 
   domain/
     models/                          # freezed
       raw_ball_detection.dart        # frameTimeMs, centerPx(Offset), diameterPx, confidence
       tracked_ball_state.dart        # フィルタ後u,v,速度,フェーズ(address/launch/lost)
-      trajectory_point.dart          # t,x,y,z,isMeasured
+      trajectory_point.dart          # t,x,y,z,isMeasured(UI描画では未使用、検出成功率記録等の内部用途で保持)
       shot_result.dart               # carryDistanceMeters, launchAngleDegrees, launchDirectionDegrees, measuredTrajectory, simulatedTrajectory
     services/
       shot_analysis_service.dart              # abstract interface(差し替え可能性の要、変更なし)
@@ -96,7 +96,7 @@ XFile(動画パス)
   → 実測区間+シミュレーション区間を結合 → ShotResult
 ```
 
-- **fps間引き**: Phase 1は間引きなしで正確さ優先(数秒クリップなら90枚程度)。実機検証で`get_thumbnail_video`の逐次呼び出しが遅い場合、10〜15fps相当に間引く(インパクト直後の有効観測窓0.2〜0.5秒でも3〜7フレーム残る想定)
+- **fps間引き**: Phase 1は間引きなしで正確さ優先(数秒クリップなら90枚程度)。実機検証で90フレーム想定のクリップに対する抽出+推論の合計時間が**目安10秒を超える場合**、10〜15fps相当に間引く(インパクト直後の有効観測窓0.2〜0.5秒でも3〜7フレーム残る想定)
 - **カルマンフィルタ**: 外部パッケージ品質が不透明なため手書き(80〜120行程度)。ゲーティングは単純な閾値判定で十分、Mahalanobis距離等の厳密な統計処理は今回は過剰
 
 ## 段階的な実装ステップ
@@ -117,10 +117,10 @@ XFile(動画パス)
 - `test/domain/`配下に単体テスト作成(既知の初速・角度での着地時間・飛距離の妥当性確認、RK4刻み幅の数値安定性確認)
 
 ### Phase 3: 本実装モデル差し替え+トラッキング+UI仕上げ
-- `BallKalmanTracker`実装(ゲーティング・フェーズ判定)
-- Roboflow Universe公開モデルへの差し替え(ユーザー自身のブラウザでのライセンス・重み入手性確認が前提。重みが直接手に入らない場合はUltralyticsで自分で学習を回すフォールバックが必要になる旨、着手前に再確認する)
+- `BallKalmanTracker`実装(ゲーティング・フェーズ判定)。合成データ(既知の観測列)を入力し、平滑化後の軌跡が期待通りか・明らかな外れ値がゲーティングで除去されるかを確認する単体テストを追加
+- Roboflow Universe公開モデルへの差し替え(ユーザー自身のブラウザでのライセンス・重み入手性確認が前提。**重みが直接手に入らない場合は自前学習は行わず、Phase 1と同じCOCO汎用モデルのまま次フェーズへ進む**)
 - `BallTrajectoryAnalysisService`でPhase1〜3の各要素を結線
-- `ResultScreen`に`CustomPainter`オーバーレイ、任意で`fl_chart`俯瞰チャート追加
+- `ResultScreen`に`CustomPainter`オーバーレイ(実測/シミュレーションの線種区別なし)、数値表示への精度注記、任意で`fl_chart`俯瞰チャート追加
 
 ### Phase 4(将来、今回は着手しない)
 - カメラ撮影(録画)機能の復活(`VideoSelectScreen`に録画導線を追加するだけで`ShotAnalysisService`以降は無改修想定)
@@ -140,4 +140,6 @@ XFile(動画パス)
 - `fvm dart analyze`でビルドエラー・lint警告がないことを確認
 - Phase 1完了時点で実機iPhoneで動画選択→解析→結果表示までの一連の流れが動くことを確認(Simulatorはカメラ非対応だが、ギャラリー動画選択+ML推論はSimulatorでもある程度検証可能。ただしCoreML/Neural Engineの実速度は実機必須)
 - Phase 2で`test/domain/`配下の単体テストが通ることを確認(距離推定式・弾道シミュレーションの妥当性)
-- Phase 3完了時点で、実際のゴルフスイング動画(複数本)を使い、検出成功率・推定飛距離の妥当性を目視確認する
+- Phase 3で`BallKalmanTracker`の単体テスト(合成データによるゲーティング・平滑化の妥当性確認)が通ることを確認
+- 距離推定の精度(仮定FOV定数の妥当性)は特定のPhaseで区切って検証するのではなく、実機での算出結果と実測値の比較を開発中随時行い、必要に応じて`assumed_camera_intrinsics.dart`の定数を調整する
+- 各Phaseの完了基準は定量的な合格閾値を設けず、プロトタイプ段階の記録目的の確認に留める。Phase 3完了時点では、実際のゴルフスイング動画(最低3〜5本)を使って検出成功率・推定飛距離の妥当性を確認し、次フェーズ着手判断のための記録として残す
