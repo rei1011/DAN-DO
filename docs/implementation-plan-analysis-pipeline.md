@@ -13,7 +13,7 @@
 
 ### 技術調査で判明した既存計画からの変更点(裏取り済み)
 
-1. **フレーム抽出**: 元々の推奨(ネイティブSwift `AVAssetReader`+Pigeon自作)は行わず、`fc_native_video_thumbnail`(pub.dev, BSD-3-Clause, iOS対応, Pub Points140/Likes45/週間DL20.6k)を採用。単発フレーム抽出APIのみのためループ呼び出しで連番フレームを取得する
+1. **フレーム抽出**: 元々の推奨(ネイティブSwift `AVAssetReader`+Pigeon自作)は行わず、`get_thumbnail_video`(pub.dev, MIT, iOS対応, Dart SDK制約`^3.4.0`, Pub Points140/Likes63/週間DL106k)を採用。老舗`video_thumbnail`(GitHub 907 stars)のフォークでDart3対応済み、Dart3対応版の中では最も実利用実績が大きい。`thumbnailData({video, imageFormat: JPEG, timeMs, quality})`で指定ミリ秒位置のJPEGバイト列を取得できるが、単発フレーム抽出APIのみのためループ呼び出しで連番フレームを取得する(懸念点: 最終更新が21ヶ月前で停滞気味だが、API自体は枯れた機能のみで破壊的変更の影響を受けにくいと判断)
 2. **ML推論**: `ultralytics_yolo`(pub.dev, **AGPL-3.0ライセンス**)を採用。個人開発・学習目的のため気にせず進める方針で合意済み(将来App Store公開時は要再検討)
 3. **モデル入手**: Phase 1は`ultralytics_yolo`公式の汎用COCO学習済みモデル(`yolo11n`、初回自動ダウンロード)の`sports ball`クラスで代用し配線確認する。ゴルフボール特化モデル(Roboflow Universe公開データセット/モデル)への差し替えはPhase 3で行うが、**公開プロジェクトで学習済み重みが直接ダウンロードできるとは限らない**(データセットのみ提供の場合、自分でUltralyticsを使って学習を回す必要が生じる可能性がある)。この点はPhase 3着手時にユーザー自身のブラウザでの確認が必要
 4. **距離推定の前提変更**: 撮影時の `videoFieldOfView` ライブ取得が前提だった数式を、既存動画では使えないため、**標準的なiPhone背面広角カメラの水平画角を固定の仮定値として使う**目安値ベースに変更する
@@ -70,7 +70,7 @@ lib/
   data/
     video/
       video_frame_source.dart              # interface: Future<Uint8List> frameAt(Duration t)
-      fc_thumbnail_frame_source.dart        # fc_native_video_thumbnailを使った実装
+      get_thumbnail_video_frame_source.dart # get_thumbnail_videoを使った実装
     ml/
       ball_detector.dart                    # ultralytics_yoloのYOLOインスタンスの薄いラッパー
       ball_detector_provider.dart           # @Riverpod(keepAlive: true)、loadModel()を1回きりにする
@@ -96,19 +96,19 @@ XFile(動画パス)
   → 実測区間+シミュレーション区間を結合 → ShotResult
 ```
 
-- **fps間引き**: Phase 1は間引きなしで正確さ優先(数秒クリップなら90枚程度)。実機検証で`fc_native_video_thumbnail`の逐次呼び出しが遅い場合、10〜15fps相当に間引く(インパクト直後の有効観測窓0.2〜0.5秒でも3〜7フレーム残る想定)
+- **fps間引き**: Phase 1は間引きなしで正確さ優先(数秒クリップなら90枚程度)。実機検証で`get_thumbnail_video`の逐次呼び出しが遅い場合、10〜15fps相当に間引く(インパクト直後の有効観測窓0.2〜0.5秒でも3〜7フレーム残る想定)
 - **カルマンフィルタ**: 外部パッケージ品質が不透明なため手書き(80〜120行程度)。ゲーティングは単純な閾値判定で十分、Mahalanobis距離等の厳密な統計処理は今回は過剰
 
 ## 段階的な実装ステップ
 
 ### Phase 0: 下地整理
-- `pubspec.yaml`に依存追加: `image_picker`, `fc_native_video_thumbnail`, `ultralytics_yolo`, `fl_chart`(任意)
+- `pubspec.yaml`に依存追加: `image_picker`, `get_thumbnail_video`, `ultralytics_yolo`, `fl_chart`(任意)
 - `lib/main.dart`からriverpod学習用サンプル(`userNameProvider`, `UserNameSwitcherView`)を削除し、実アプリのエントリポイント(`ProviderScope`+`MaterialApp`+`VideoSelectScreen`起点のルーティング)に置き換え
 - `test/score_change_view_test.dart`・`test/widget_test.dart`は現行`main.dart`と無関係で既に壊れているため削除
 - `ios/Runner/Info.plist`に`NSPhotoLibraryUsageDescription`を追加(`image_picker`のギャラリーアクセスに必須)
 
 ### Phase 1: 配線確認(精度度外視)
-- `image_picker`で動画選択→`fc_native_video_thumbnail`でフレーム抽出→`ultralytics_yolo`公式`yolo11n`モデルの`sports ball`クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
+- `image_picker`で動画選択→`get_thumbnail_video`でフレーム抽出→`ultralytics_yolo`公式`yolo11n`モデルの`sports ball`クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
 - ダミーの距離推定(適当な定数)で仮の`ShotResult`を返し、3画面遷移・エラー分岐を実機で通す
 - `FakeShotAnalysisService`を用意し、provider override経由の画面遷移widgetテストを1本作成
 
@@ -130,7 +130,7 @@ XFile(動画パス)
 
 ## 既存ファイルへの影響
 
-- **`pubspec.yaml`**: `image_picker`, `fc_native_video_thumbnail`, `ultralytics_yolo`, `fl_chart`(任意)を追加。既存の`camera`は削除せず放置。`freezed`/`json_serializable`/`riverpod_generator`は既存導入済みで今回初めて実際に使う
+- **`pubspec.yaml`**: `image_picker`, `get_thumbnail_video`, `ultralytics_yolo`, `fl_chart`(任意)を追加。既存の`camera`は削除せず放置。`freezed`/`json_serializable`/`riverpod_generator`は既存導入済みで今回初めて実際に使う
 - **`lib/main.dart`**: riverpod学習用サンプルを全削除し実アプリのエントリポイントに置き換え。`main.g.dart`は`build_runner`で再生成
 - **`test/`**: 陳腐化した2ファイルを削除、Phase 2/3で新規テストを追加
 - **モデルのライセンス・出典管理**: `docs/model-provenance.md`を新設し、Roboflowデータセット/モデルのURL・ライセンス種別・確認日を記録(Phase 3着手時)
