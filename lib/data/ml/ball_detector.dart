@@ -15,7 +15,12 @@ class BallDetector {
 
   final YOLO _yolo;
 
-  Future<void> loadModel() => _yolo.loadModel();
+  Future<void> loadModel() async {
+    final success = await _yolo.loadModel();
+    if (!success) {
+      throw StateError('YOLOモデル($officialModelId)のロードに失敗しました');
+    }
+  }
 
   Future<List<RawBallDetection>> detect(
     Uint8List frameBytes, {
