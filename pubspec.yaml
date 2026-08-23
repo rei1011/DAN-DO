@@ -50,6 +50,8 @@ dependencies:
   json_annotation: ^4.12.0
   image_picker: ^1.2.3
   get_thumbnail_video: ^0.7.3
+  # XFileをdomain/data層で直接参照するため明示的な依存にする(image_picker/get_thumbnail_video経由の推移的依存から独立させる)
+  cross_file: ^0.3.4
   ultralytics_yolo: ^0.6.13
   fl_chart: ^1.2.0
 

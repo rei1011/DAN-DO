@@ -1,0 +1,7 @@
+import 'package:cross_file/cross_file.dart';
+
+import '../models/shot_result.dart';
+
+abstract class ShotAnalysisService {
+  Future<ShotResult> analyze(XFile video);
+}
