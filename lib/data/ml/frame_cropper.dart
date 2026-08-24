@@ -44,10 +44,14 @@ class FrameCropper {
       ui.Paint(),
     );
     final picture = recorder.endRecording();
+    image.dispose();
+    codec.dispose();
     final croppedImage = await picture.toImage(width.round(), height.round());
+    picture.dispose();
     final byteData = await croppedImage.toByteData(
       format: ui.ImageByteFormat.png,
     );
+    croppedImage.dispose();
 
     return CroppedFrame(
       bytes: byteData!.buffer.asUint8List(),

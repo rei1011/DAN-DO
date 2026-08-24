@@ -84,6 +84,7 @@ class _FramePicker extends StatefulWidget {
 
 class _FramePickerState extends State<_FramePicker> {
   late final Future<ui.Image> _imageFuture;
+  ui.Image? _decodedImage;
 
   @override
   void initState() {
@@ -94,7 +95,18 @@ class _FramePickerState extends State<_FramePicker> {
   Future<ui.Image> _decodeImage(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
+    codec.dispose();
+    // 表示にはwidget.bytesをImage.memoryで直接使うため、このui.Imageは
+    // 座標変換用のwidth/height取得にしか使わない。dispose()で解放するため
+    // ここでは保持のみ行う。
+    _decodedImage = frame.image;
     return frame.image;
+  }
+
+  @override
+  void dispose() {
+    _decodedImage?.dispose();
+    super.dispose();
   }
 
   @override

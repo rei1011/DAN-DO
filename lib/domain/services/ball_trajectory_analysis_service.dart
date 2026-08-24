@@ -98,11 +98,11 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
       }
 
       detections.addAll(frameDetections);
-      consecutiveLostFrames = frameDetections.isEmpty
-          ? consecutiveLostFrames + 1
-          : 0;
 
-      if (roiCursor == null && frameDetections.isEmpty) {
+      final hasConfidentCandidate = frameDetections.any(
+        (d) => d.confidence >= tracker.confidenceThreshold,
+      );
+      if (roiCursor == null && !hasConfidentCandidate) {
         continue;
       }
       final stepResult = tracker.step(
@@ -110,6 +110,11 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
         candidatesAtFrame: frameDetections,
         frameTimeMs: t.inMilliseconds,
       );
+      consecutiveLostFrames =
+          (frameDetections.isEmpty ||
+              stepResult.state.phase == BallTrackingPhase.lost)
+          ? consecutiveLostFrames + 1
+          : 0;
       roiCursor = stepResult.cursor;
       searchCenterPx = Offset(roiCursor.u, roiCursor.v);
       cropSizePx = RoiConstants.trackingCropSizePx;
