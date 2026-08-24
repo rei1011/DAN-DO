@@ -26,8 +26,13 @@ void main() {
     });
 
     test('点が1つ以下なら空リストを返す', () {
-      const points = [TrajectoryPoint(t: 0, x: 0, y: 0, z: 0, isMeasured: true)];
-      final offsets = projectTrajectoryToCanvasOffsets(points, const Size(200, 100));
+      const points = [
+        TrajectoryPoint(t: 0, x: 0, y: 0, z: 0, isMeasured: true),
+      ];
+      final offsets = projectTrajectoryToCanvasOffsets(
+        points,
+        const Size(200, 100),
+      );
       expect(offsets, isEmpty);
     });
   });
