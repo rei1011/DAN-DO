@@ -79,6 +79,15 @@
 - [x] Phase完了確認: `fvm flutter test`・`fvm dart analyze`が通ることを確認
 - [ ] Phase完了確認: 実際のゴルフスイング動画(調査で使用した`IMG_3068.MOV`を含む)で、ROI導入前後の検出成功率・飛距離推定の妥当性を比較し、次フェーズ着手判断のための記録として残す(**実機iPhoneでの確認が必要なため、ユーザー側での実施が必要な項目として残っている**)
 
+### フォローアップ課題(PR #10統合時点で既知、未修正)
+
+- [ ] `consecutiveLostFrames`が`continue`分岐で更新されない不具合を修正する
+  - 症状: `lib/domain/services/ball_trajectory_analysis_service.dart`の`analyze()`ループで、`roiCursor == null`かつ確信度が閾値未満の検出しかない場合に`continue`する分岐があるが、この分岐では`consecutiveLostFrames`をインクリメントしていない
+  - 影響: アドレス区間(タップ直後、まだ確信度の高い検出が一度もない状態)でボールが検出され続けない場合、`consecutiveLostFrames`が閾値(`RoiConstants.maxLostFramesBeforeFullFrameFallback`)に達せず、全体フレーム探索へのフォールバックが機能しないまま、動画全体で同じ小さいクロップ範囲を探索し続けてしまう(トラッキング確立後にロストした場合のフォールバックは正しく動作する)
+  - 発見経緯: 最終ブランチ全体レビューで見つかったCritical/Important計4件の指摘をまとめて1回で修正した際、修正同士の組み合わせで新たに生じた回帰(修正ラウンドの運用上限に達したため、その場では再修正せずPRに既知の課題として記録した)
+  - 修正方針: `continue`分岐でも`consecutiveLostFrames`をインクリメントする(またはインクリメントの計算位置を`tracker.step()`呼び出し前に移し、`continue`より先に評価する)
+  - 対応: 別PRで修正する
+
 ## Phase 4(将来、今回は着手しない)
 
 - [ ] カメラ撮影(録画)機能の復活(`VideoSelectScreen` に録画導線を追加するだけで `ShotAnalysisService` 以降は無改修想定)
