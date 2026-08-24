@@ -1,6 +1,5 @@
 import 'package:dan_do/core/roi_constants.dart';
 import 'package:dan_do/domain/services/roi_sequencer.dart';
-import 'package:flutter/material.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
