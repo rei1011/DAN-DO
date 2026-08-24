@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -7,16 +9,20 @@ import '../result/result_screen.dart';
 import 'analysis_controller.dart';
 
 class AnalyzingScreen extends ConsumerWidget {
-  const AnalyzingScreen({super.key, required this.video});
+  const AnalyzingScreen({
+    super.key,
+    required this.video,
+    required this.initialBallPositionPx,
+  });
 
   final XFile video;
+  final Offset initialBallPositionPx;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen<AsyncValue<ShotResult>>(analysisControllerProvider(video), (
-      previous,
-      next,
-    ) {
+    final provider = analysisControllerProvider(video, initialBallPositionPx);
+
+    ref.listen<AsyncValue<ShotResult>>(provider, (previous, next) {
       next.whenOrNull(
         data: (result) {
           Navigator.of(context).pushReplacement<void, void>(
@@ -28,7 +34,7 @@ class AnalyzingScreen extends ConsumerWidget {
       );
     });
 
-    final state = ref.watch(analysisControllerProvider(video));
+    final state = ref.watch(provider);
 
     final showError = state.hasError && !state.isLoading;
 

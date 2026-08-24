@@ -16,7 +16,7 @@ final class AnalysisControllerProvider
     extends $AsyncNotifierProvider<AnalysisController, ShotResult> {
   AnalysisControllerProvider._({
     required AnalysisControllerFamily super.from,
-    required XFile super.argument,
+    required (XFile, Offset) super.argument,
   }) : super(
          retry: null,
          name: r'analysisControllerProvider',
@@ -32,7 +32,7 @@ final class AnalysisControllerProvider
   String toString() {
     return r'analysisControllerProvider'
         ''
-        '($argument)';
+        '$argument';
   }
 
   @$internal
@@ -51,7 +51,7 @@ final class AnalysisControllerProvider
 }
 
 String _$analysisControllerHash() =>
-    r'bdef4202c6343f7570353a8c83f664b688e180ff';
+    r'd09b762481a6165cd213c5bf1e6ab9e5faac0d18';
 
 final class AnalysisControllerFamily extends $Family
     with
@@ -60,7 +60,7 @@ final class AnalysisControllerFamily extends $Family
           AsyncValue<ShotResult>,
           ShotResult,
           FutureOr<ShotResult>,
-          XFile
+          (XFile, Offset)
         > {
   AnalysisControllerFamily._()
     : super(
@@ -71,18 +71,22 @@ final class AnalysisControllerFamily extends $Family
         isAutoDispose: true,
       );
 
-  AnalysisControllerProvider call(XFile video) =>
-      AnalysisControllerProvider._(argument: video, from: this);
+  AnalysisControllerProvider call(XFile video, Offset initialBallPositionPx) =>
+      AnalysisControllerProvider._(
+        argument: (video, initialBallPositionPx),
+        from: this,
+      );
 
   @override
   String toString() => r'analysisControllerProvider';
 }
 
 abstract class _$AnalysisController extends $AsyncNotifier<ShotResult> {
-  late final _$args = ref.$arg as XFile;
-  XFile get video => _$args;
+  late final _$args = ref.$arg as (XFile, Offset);
+  XFile get video => _$args.$1;
+  Offset get initialBallPositionPx => _$args.$2;
 
-  FutureOr<ShotResult> build(XFile video);
+  FutureOr<ShotResult> build(XFile video, Offset initialBallPositionPx);
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
@@ -95,6 +99,6 @@ abstract class _$AnalysisController extends $AsyncNotifier<ShotResult> {
               Object?,
               Object?
             >;
-    return element.handleCreate(ref, () => build(_$args));
+    return element.handleCreate(ref, () => build(_$args.$1, _$args.$2));
   }
 }
