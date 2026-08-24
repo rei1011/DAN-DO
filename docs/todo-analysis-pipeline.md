@@ -62,6 +62,23 @@
 - [ ] Phase完了確認: 実際のゴルフスイング動画(最低3〜5本)で検出成功率・推定飛距離の妥当性を確認し、次フェーズ着手判断のための記録として残す(**実機iPhoneでの確認が必要なため、ユーザー側での実施が必要な項目として残っている**)
 - [x] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認(`No issues found!`)
 
+## Phase 3.5: 検出前処理(ROI限定・クロップ推論)
+
+元計画: [implementation-plan-roi-crop-detection.md](implementation-plan-roi-crop-detection.md)
+背景: [investigation-analyzing-screen-stuck.md](investigation-analyzing-screen-stuck.md) §6 対策案1
+
+- [ ] `FrameCropper`(`dart:ui`によるフレームクロップ+座標変換)実装+単体テスト
+- [ ] `RoiConstants`/`RoiSequencer`(次フレームのROI決定ロジック)実装+単体テスト
+- [ ] `BallKalmanTracker`に逐次ステップAPI(`step`/`BallTrackerCursor`)を追加するリファクタ(既存`track()`テストは無改修のまま通す)
+- [ ] `ShotAnalysisService`/`BallTrajectoryAnalysisService.analyze()`をROIベースの逐次検出+追跡ループに書き換え(`buildShotResult()`のシグネチャ・既存テストは変更しない)
+- [ ] `AnalysisController`/`AnalyzingScreen`に`initialBallPositionPx`を通す
+- [ ] `FirstFrameReader`(動画の最初のフレーム取得の抽象化)実装
+- [ ] タップ座標⇔画像ピクセル座標の変換関数(`tap_position_mapper.dart`)実装+単体テスト
+- [ ] `BallPositionPickerScreen`(タップでボール位置を指定する新規画面)実装、`VideoSelectScreen`からの導線を追加
+- [ ] E2Eウィジェットテスト(`video_analysis_flow_test.dart`)を新しい画面遷移(VideoSelect→BallPositionPicker→Analyzing→Result)に更新
+- [ ] Phase完了確認: `fvm flutter test`・`fvm dart analyze`が通ることを確認
+- [ ] Phase完了確認: 実際のゴルフスイング動画(調査で使用した`IMG_3068.MOV`を含む)で、ROI導入前後の検出成功率・飛距離推定の妥当性を比較し、次フェーズ着手判断のための記録として残す(**実機iPhoneでの確認が必要なため、ユーザー側での実施が必要な項目として残っている**)
+
 ## Phase 4(将来、今回は着手しない)
 
 - [ ] カメラ撮影(録画)機能の復活(`VideoSelectScreen` に録画導線を追加するだけで `ShotAnalysisService` 以降は無改修想定)
