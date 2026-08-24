@@ -15,7 +15,7 @@
 
 1. **フレーム抽出**: 元々の推奨(ネイティブSwift `AVAssetReader`+Pigeon自作)は行わず、`get_thumbnail_video`(pub.dev, MIT, iOS対応, Dart SDK制約`^3.4.0`, Pub Points140/Likes63/週間DL106k)を採用。老舗`video_thumbnail`(GitHub 907 stars)のフォークでDart3対応済み、Dart3対応版の中では最も実利用実績が大きい。`thumbnailData({video, imageFormat: JPEG, timeMs, quality})`で指定ミリ秒位置のJPEGバイト列を取得できるが、単発フレーム抽出APIのみのためループ呼び出しで連番フレームを取得する(懸念点: 最終更新が21ヶ月前で停滞気味だが、API自体は枯れた機能のみで破壊的変更の影響を受けにくいと判断)
 2. **ML推論**: `ultralytics_yolo`(pub.dev, **AGPL-3.0ライセンス**)を採用。個人開発・学習目的のため気にせず進める方針で合意済み(将来App Store公開時は要再検討)
-3. **モデル入手**: Phase 1は`ultralytics_yolo`公式の汎用COCO学習済みモデル(`yolo11n`、初回自動ダウンロード)の`sports ball`クラスで代用し配線確認する。ゴルフボール特化モデル(Roboflow Universe公開データセット/モデル)への差し替えはPhase 3で行うが、**公開プロジェクトで学習済み重みが直接ダウンロードできるとは限らない**(データセットのみ提供の場合がある)。この点はPhase 3着手時にユーザー自身のブラウザでの確認が必要だが、**重みが直接入手できない場合、自前学習(Ultralyticsでの学習)は今回のスコープ外とし、Phase 1と同じCOCO汎用`sports ball`クラスのまま妥協する**(精度向上はPhase 4以降に先送り)
+3. **モデル入手**: Phase 1は`ultralytics_yolo`公式の汎用COCO学習済みモデル(`yolo26n`、初回自動ダウンロード)の`sports ball`クラスで代用し配線確認する。導入した`ultralytics_yolo 0.6.13`ではyolo11系の自動ダウンロードが未サポート(yolo26系のみサポート)と実装中に判明したため、当初想定の`yolo11n`から`yolo26n`に変更した。ゴルフボール特化モデル(Roboflow Universe公開データセット/モデル)への差し替えはPhase 3で行うが、**公開プロジェクトで学習済み重みが直接ダウンロードできるとは限らない**(データセットのみ提供の場合がある)。この点はPhase 3着手時にユーザー自身のブラウザでの確認が必要だが、**重みが直接入手できない場合、自前学習(Ultralyticsでの学習)は今回のスコープ外とし、Phase 1と同じCOCO汎用`sports ball`クラスのまま妥協する**(精度向上はPhase 4以降に先送り)
 4. **距離推定の前提変更**: 撮影時の `videoFieldOfView` ライブ取得が前提だった数式を、既存動画では使えないため、**固定の仮定画角**を使う目安値ベースに変更する。対象機種は**iPhone 17(ベースモデル)・縦向き撮影**を前提とする。Appleの公式スペック(メインカメラ26mm相当)からフルサイズ換算で逆算すると、横向き基準の水平画角は約69.4°になるが、**センサーは物理的に横向き固定のため、縦向き撮影で回転後のフレーム幅とペアリングすべきは狭い軸側の約49.6°**であり、69.4°をそのまま使うと距離推定が体系的にずれる(調査で判明・裏取り済み)。16:9クロップ等でさらに誤差が残るため、この49.6°はあくまで初期値とし、開発中は算出結果と実測値の比較を随時行って妥当性を確認する
 
 ## 画面構成
@@ -108,7 +108,7 @@ XFile(動画パス)
 - `ios/Runner/Info.plist`に`NSPhotoLibraryUsageDescription`を追加(`image_picker`のギャラリーアクセスに必須)
 
 ### Phase 1: 配線確認(精度度外視)
-- `image_picker`で動画選択→`get_thumbnail_video`でフレーム抽出→`ultralytics_yolo`公式`yolo11n`モデルの`sports ball`クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
+- `image_picker`で動画選択→`get_thumbnail_video`でフレーム抽出→`ultralytics_yolo`公式`yolo26n`モデルの`sports ball`クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
 - ダミーの距離推定(適当な定数)で仮の`ShotResult`を返し、3画面遷移・エラー分岐を実機で通す
 - `FakeShotAnalysisService`を用意し、provider override経由の画面遷移widgetテストを1本作成
 
