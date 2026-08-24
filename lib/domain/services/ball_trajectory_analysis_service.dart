@@ -1,18 +1,39 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../core/assumed_camera_intrinsics.dart';
 import '../../data/ml/ball_detector.dart';
 import '../../data/ml/ball_detector_provider.dart';
+import '../../data/tracking/ball_kalman_tracker.dart';
 import '../../data/video/get_thumbnail_video_frame_source.dart';
 import '../../data/video/video_duration_reader.dart';
 import '../../data/video/video_frame_source.dart';
 import '../../data/video/video_player_duration_reader.dart';
 import '../models/raw_ball_detection.dart';
 import '../models/shot_result.dart';
+import '../models/tracked_ball_state.dart';
+import '../models/trajectory_point.dart';
+import 'ballistics_simulator.dart';
+import 'distance_estimation.dart';
+import 'launch_parameter_estimator.dart';
 import 'shot_analysis_service.dart';
 
 part 'ball_trajectory_analysis_service.g.dart';
+
+/// アドレス区間または飛球区間の観測が、弾道パラメータ推定に必要な数だけ
+/// 得られなかった場合に投げられる。
+class InsufficientTrajectoryDataException implements Exception {
+  const InsufficientTrajectoryDataException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'InsufficientTrajectoryDataException: $message';
+}
 
 class BallTrajectoryAnalysisService implements ShotAnalysisService {
   BallTrajectoryAnalysisService({
@@ -33,8 +54,10 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     final frameSource = frameSourceFactory(video);
 
     final detections = <RawBallDetection>[];
+    double? frameWidthPx;
     for (var t = Duration.zero; t < duration; t += frameInterval) {
       final frameBytes = await frameSource.frameAt(t);
+      frameWidthPx ??= await _decodeFrameWidthPx(frameBytes);
       detections.addAll(await ballDetector.detect(frameBytes, frameTime: t));
     }
 
@@ -42,14 +65,100 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
       'BallTrajectoryAnalysisService: sports ball detections=${detections.length}',
     );
 
-    // Phase1は配線確認が目的のため固定のダミー値を返す。距離推定・弾道シミュレーションの
-    // 実計算はPhase2/3(distance_estimation.dart / ballistics_simulator.dart)で置き換える。
-    return const ShotResult(
-      carryDistanceMeters: 150,
-      launchAngleDegrees: 15,
-      launchDirectionDegrees: 0,
-      measuredTrajectory: [],
-      simulatedTrajectory: [],
+    if (frameWidthPx == null) {
+      throw const InsufficientTrajectoryDataException(
+        '動画からフレームを取得できませんでした',
+      );
+    }
+
+    return buildShotResult(detections: detections, frameWidthPx: frameWidthPx);
+  }
+
+  static Future<double> _decodeFrameWidthPx(Uint8List frameBytes) async {
+    final codec = await ui.instantiateImageCodec(frameBytes);
+    final frame = await codec.getNextFrame();
+    return frame.image.width.toDouble();
+  }
+
+  /// [BallKalmanTracker]・[DistanceEstimation]・[LaunchParameterEstimator]・
+  /// [BallisticsSimulator]を結線し、検出列から[ShotResult]を構築する純粋関数。
+  ///
+  /// アドレス区間直近の観測から基準奥行き(Z0)を、飛球区間の観測から
+  /// 打ち出しパラメータを算出し、着地までの弾道をシミュレーションする。
+  static ShotResult buildShotResult({
+    required List<RawBallDetection> detections,
+    required double frameWidthPx,
+    BallKalmanTracker tracker = const BallKalmanTracker(),
+  }) {
+    final trackedStates = tracker.track(detections);
+
+    final addressStates = trackedStates
+        .where((s) => s.phase == BallTrackingPhase.address)
+        .toList();
+    final launchStates = trackedStates
+        .where((s) => s.phase == BallTrackingPhase.launch)
+        .toList();
+
+    if (addressStates.isEmpty) {
+      throw const InsufficientTrajectoryDataException(
+        'アドレス区間でボールを検出できませんでした',
+      );
+    }
+    if (launchStates.length < 2) {
+      throw const InsufficientTrajectoryDataException(
+        '飛球区間の観測が不足しています(ボールをロストした可能性があります)',
+      );
+    }
+
+    final focalLengthPx = DistanceEstimation.focalLengthPx(
+      frameWidthPx: frameWidthPx,
+      fovDegrees: AssumedCameraIntrinsics.narrowAxisFovDegrees,
+    );
+
+    final referenceState = addressStates.last;
+    final originPx = ui.Offset(referenceState.u, referenceState.v);
+    final referenceDepthMeters = DistanceEstimation.estimateDepthMeters(
+      diameterPx: referenceState.diameterPx,
+      focalLengthPx: focalLengthPx,
+    );
+
+    final launchStartMs = launchStates.first.frameTimeMs;
+    final measuredTrajectory = launchStates.map((state) {
+      final world = DistanceEstimation.estimateWorldPosition(
+        centerPx: ui.Offset(state.u, state.v),
+        diameterPx: state.diameterPx,
+        originPx: originPx,
+        referenceDepthMeters: referenceDepthMeters,
+        focalLengthPx: focalLengthPx,
+      );
+      return TrajectoryPoint(
+        t: (state.frameTimeMs - launchStartMs) / 1000.0,
+        x: world.x,
+        y: world.y,
+        z: world.z,
+        isMeasured: true,
+      );
+    }).toList();
+
+    final launchParams = LaunchParameterEstimator.estimate(measuredTrajectory);
+
+    final simulatedTrajectory = BallisticsSimulator.simulate(
+      v0: launchParams.v0,
+      launchAngleDegrees: launchParams.launchAngleDegrees,
+      launchDirectionDegrees: launchParams.launchDirectionDegrees,
+    );
+
+    final landing = simulatedTrajectory.last;
+    final carryDistanceMeters = math.sqrt(
+      landing.x * landing.x + landing.z * landing.z,
+    );
+
+    return ShotResult(
+      carryDistanceMeters: carryDistanceMeters,
+      launchAngleDegrees: launchParams.launchAngleDegrees,
+      launchDirectionDegrees: launchParams.launchDirectionDegrees,
+      measuredTrajectory: measuredTrajectory,
+      simulatedTrajectory: simulatedTrajectory,
     );
   }
 }

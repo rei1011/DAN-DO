@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../domain/models/shot_result.dart';
+import 'trajectory_painter.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({super.key, required this.video, required this.result});
@@ -76,16 +77,36 @@ class _ResultScreenState extends State<ResultScreen> {
             const Center(child: CircularProgressIndicator()),
           const SizedBox(height: 24),
           Text(
-            '飛距離: ${widget.result.carryDistanceMeters.toStringAsFixed(1)} m',
+            '飛距離(目安値): ${widget.result.carryDistanceMeters.toStringAsFixed(1)} m',
             key: const Key('carryDistanceText'),
           ),
           Text(
-            '打ち出し角度: ${widget.result.launchAngleDegrees.toStringAsFixed(1)} 度',
+            '打ち出し角度(目安値): ${widget.result.launchAngleDegrees.toStringAsFixed(1)} 度',
             key: const Key('launchAngleText'),
           ),
           Text(
-            '打ち出し方向: ${widget.result.launchDirectionDegrees.toStringAsFixed(1)} 度',
+            '打ち出し方向(目安値): ${widget.result.launchDirectionDegrees.toStringAsFixed(1)} 度',
             key: const Key('launchDirectionText'),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '※画角は固定の仮定値を使用しているため、数値・軌道はいずれも目安です',
+            key: Key('accuracyNoteText'),
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          const Text('軌道(側面図・目安)'),
+          const SizedBox(height: 8),
+          SizedBox(
+            key: const Key('trajectoryChart'),
+            height: 200,
+            child: CustomPaint(
+              painter: TrajectoryPainter([
+                ...widget.result.measuredTrajectory,
+                ...widget.result.simulatedTrajectory,
+              ]..sort((a, b) => a.z.compareTo(b.z))),
+              size: Size.infinite,
+            ),
           ),
         ],
       ),
