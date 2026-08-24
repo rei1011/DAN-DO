@@ -28,11 +28,11 @@
 
 - [x] `image_picker` で動画選択 → `get_thumbnail_video` でフレーム抽出 → `ultralytics_yolo` 公式 `yolo26n` モデルの `sports ball` クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
 - [x] ダミーの距離推定(適当な定数)で仮の `ShotResult` を返す
-- [ ] 3画面遷移(VideoSelectScreen → AnalyzingScreen → ResultScreen)・エラー分岐を実機で通す
+- [x] 3画面遷移(VideoSelectScreen → AnalyzingScreen → ResultScreen)・エラー分岐を実機で通す
   - 注意: `ballDetectorProvider`(モデルロード)が実際に失敗すると、Riverpodの自動リトライが`ballDetectorProvider`→`shotAnalysisServiceProvider`→`analysisControllerProvider`の3層で個別に発動し、AnalyzingScreenが最大約76〜114秒「解析中」表示のまま進まないことがある(フリーズではない)。実機確認時にネットワーク不調でモデルダウンロードが失敗した場合はこの挙動を想定しておくこと。恒常的に気になる場合はPhase2以降で`retry:`によるリトライ制限を検討
 - [x] `FakeShotAnalysisService` を用意
 - [x] provider override経由の画面遷移widgetテストを1本作成
-- [ ] Phase完了確認: 実機iPhoneで動画選択→解析→結果表示までの一連の流れが動くことを確認
+- [x] Phase完了確認: 実機iPhoneで動画選択→解析→結果表示までの一連の流れが動くことを確認
 - [x] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認
 
 ## Phase 2: 距離推定・弾道物理モデルの単体検証(純粋Dart、UI/ML非依存)
