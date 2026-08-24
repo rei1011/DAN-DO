@@ -27,6 +27,7 @@ class _VideoSelectScreenState extends ConsumerState<VideoSelectScreen> {
     try {
       final picker = ref.read(videoPickerProvider);
       final video = await picker.pickVideo();
+      if (!mounted) return;
       if (video == null) {
         setState(() => _isPicking = false);
         return;
@@ -34,6 +35,7 @@ class _VideoSelectScreenState extends ConsumerState<VideoSelectScreen> {
 
       final durationReader = ref.read(videoDurationReaderProvider);
       final duration = await durationReader.read(video);
+      if (!mounted) return;
       if (duration > maxDuration) {
         setState(() {
           _isPicking = false;
@@ -48,6 +50,7 @@ class _VideoSelectScreenState extends ConsumerState<VideoSelectScreen> {
         MaterialPageRoute(builder: (_) => AnalyzingScreen(video: video)),
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isPicking = false;
         _errorMessage = '動画の選択に失敗しました: $e';
