@@ -9,7 +9,7 @@
 - タスクに着手したら `[ ]` → `[x]` にする
 - 各Phase末尾の確認項目まで終わったら次のPhaseへ進む
 - タスクの詳細(コード配置・設計判断の理由など)は元計画の該当セクションを参照
-- 現在のステータス: **Phase 0 完了、Phase 1 未着手**(2026-08-23時点)
+- 現在のステータス: **Phase 1 実装完了・実機確認待ち**(2026-08-24時点)
 
 ## 全Phase共通・継続タスク
 
@@ -26,13 +26,13 @@
 
 ## Phase 1: 配線確認(精度度外視)
 
-- [ ] `image_picker` で動画選択 → `get_thumbnail_video` でフレーム抽出 → `ultralytics_yolo` 公式 `yolo11n` モデルの `sports ball` クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
-- [ ] ダミーの距離推定(適当な定数)で仮の `ShotResult` を返す
+- [x] `image_picker` で動画選択 → `get_thumbnail_video` でフレーム抽出 → `ultralytics_yolo` 公式 `yolo26n` モデルの `sports ball` クラスで推論、が実機で一通り動くことを確認(最大のリスク検証ポイント)
+- [x] ダミーの距離推定(適当な定数)で仮の `ShotResult` を返す
 - [ ] 3画面遷移(VideoSelectScreen → AnalyzingScreen → ResultScreen)・エラー分岐を実機で通す
-- [ ] `FakeShotAnalysisService` を用意
-- [ ] provider override経由の画面遷移widgetテストを1本作成
+- [x] `FakeShotAnalysisService` を用意
+- [x] provider override経由の画面遷移widgetテストを1本作成
 - [ ] Phase完了確認: 実機iPhoneで動画選択→解析→結果表示までの一連の流れが動くことを確認
-- [ ] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認
+- [x] Phase完了確認: `fvm dart analyze` でビルドエラー・lint警告がないことを確認
 
 ## Phase 2: 距離推定・弾道物理モデルの単体検証(純粋Dart、UI/ML非依存)
 

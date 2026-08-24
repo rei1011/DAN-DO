@@ -4,6 +4,15 @@ import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../domain/models/raw_ball_detection.dart';
 
+class ModelLoadException implements Exception {
+  const ModelLoadException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'ModelLoadException: $message';
+}
+
 class BallDetector {
   BallDetector({YOLO? yolo})
     : _yolo = yolo ?? YOLO(modelPath: officialModelId, task: YOLOTask.detect);
@@ -18,7 +27,7 @@ class BallDetector {
   Future<void> loadModel() async {
     final success = await _yolo.loadModel();
     if (!success) {
-      throw StateError('YOLOモデル($officialModelId)のロードに失敗しました');
+      throw ModelLoadException('YOLOモデル($officialModelId)のロードに失敗しました');
     }
   }
 

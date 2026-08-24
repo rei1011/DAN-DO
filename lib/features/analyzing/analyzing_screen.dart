@@ -30,25 +30,27 @@ class AnalyzingScreen extends ConsumerWidget {
 
     final state = ref.watch(analysisControllerProvider(video));
 
+    final showError = state.hasError && !state.isLoading;
+
     return Scaffold(
       appBar: AppBar(title: const Text('解析中')),
       body: Center(
-        child: switch (state) {
-          AsyncValue(:final error?) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('解析に失敗しました: $error'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                key: const Key('backToVideoSelectButton'),
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
-                child: const Text('別の動画を選ぶ'),
-              ),
-            ],
-          ),
-          AsyncValue() => const CircularProgressIndicator(),
-        },
+        child: showError
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('解析に失敗しました: ${state.error}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    key: const Key('backToVideoSelectButton'),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).popUntil((route) => route.isFirst),
+                    child: const Text('別の動画を選ぶ'),
+                  ),
+                ],
+              )
+            : const CircularProgressIndicator(),
       ),
     );
   }
