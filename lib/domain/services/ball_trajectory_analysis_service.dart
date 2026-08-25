@@ -72,6 +72,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     for (var t = Duration.zero; t < duration; t += frameInterval) {
       final frameBytes = await frameSource.frameAt(t);
       frameWidthPx ??= await _decodeFrameWidthPx(frameBytes);
+      debugPrint('[diag] frameBytesLength=${frameBytes.lengthInBytes}');
 
       final decision = RoiSequencer.decideNextRoi(
         searchCenterPx: searchCenterPx,
@@ -99,6 +100,13 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
 
       detections.addAll(frameDetections);
 
+      debugPrint(
+        '[diag] t=${t.inMilliseconds}ms '
+        'mode=${decision.useFullFrame ? "full" : "crop c=${decision.centerPx} sz=${decision.cropSizePx}"} '
+        'n=${frameDetections.length} '
+        '${frameDetections.map((d) => "(conf=${d.confidence.toStringAsFixed(2)},pos=${d.centerPx},d=${d.diameterPx.toStringAsFixed(1)})").join(" ")}',
+      );
+
       final hasConfidentCandidate = frameDetections.any(
         (d) => d.confidence >= tracker.confidenceThreshold,
       );
@@ -109,6 +117,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
         cursor: roiCursor,
         candidatesAtFrame: frameDetections,
         frameTimeMs: t.inMilliseconds,
+        referencePositionPx: initialBallPositionPx,
       );
       consecutiveLostFrames =
           (frameDetections.isEmpty ||
@@ -118,6 +127,13 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
       roiCursor = stepResult.cursor;
       searchCenterPx = Offset(roiCursor.u, roiCursor.v);
       cropSizePx = RoiConstants.trackingCropSizePx;
+
+      debugPrint(
+        '[diag]   -> phase=${stepResult.state.phase.name} '
+        'cursor=(${roiCursor.u.toStringAsFixed(1)},${roiCursor.v.toStringAsFixed(1)}) '
+        'vel=(${roiCursor.du.toStringAsFixed(1)},${roiCursor.dv.toStringAsFixed(1)}) '
+        'lostStreak=$consecutiveLostFrames',
+      );
     }
 
     debugPrint(
@@ -128,7 +144,11 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
       throw const InsufficientTrajectoryDataException('動画からフレームを取得できませんでした');
     }
 
-    return buildShotResult(detections: detections, frameWidthPx: frameWidthPx);
+    return buildShotResult(
+      detections: detections,
+      frameWidthPx: frameWidthPx,
+      initialBallPositionPx: initialBallPositionPx,
+    );
   }
 
   static Future<double> _decodeFrameWidthPx(Uint8List frameBytes) async {
@@ -145,9 +165,13 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
   static ShotResult buildShotResult({
     required List<RawBallDetection> detections,
     required double frameWidthPx,
+    Offset? initialBallPositionPx,
     BallKalmanTracker tracker = const BallKalmanTracker(),
   }) {
-    final trackedStates = tracker.track(detections);
+    final trackedStates = tracker.track(
+      detections,
+      referencePositionPx: initialBallPositionPx,
+    );
 
     final addressStates = trackedStates
         .where((s) => s.phase == BallTrackingPhase.address)

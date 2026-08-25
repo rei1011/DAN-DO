@@ -80,6 +80,24 @@ void main() {
       expect(states[3].v, closeTo(100, 5));
     });
 
+    test('予測位置の近くにあってもサイズが大きく異なる候補(ノイズ等)には乗り移らない', () {
+      const tracker = BallKalmanTracker();
+      final detections = [
+        _detection(frameTimeMs: 0, u: 100, v: 100, diameterPx: 28),
+        _detection(frameTimeMs: 33, u: 100, v: 100, diameterPx: 28),
+        // 近くにある小さなノイズ候補(実際のボールの1/5程度のサイズ)
+        _detection(frameTimeMs: 66, u: 130, v: 100, diameterPx: 5, confidence: 0.4),
+        _detection(frameTimeMs: 99, u: 100, v: 100, diameterPx: 28),
+      ];
+
+      final states = tracker.track(detections);
+
+      expect(states, hasLength(4));
+      expect(states[2].phase, BallTrackingPhase.lost);
+      expect(states[3].phase, BallTrackingPhase.address);
+      expect(states[3].u, closeTo(100, 5));
+    });
+
     test('信頼度が閾値未満の検出は候補から除外される', () {
       const tracker = BallKalmanTracker(confidenceThreshold: 0.5);
       final detections = [
@@ -114,6 +132,30 @@ void main() {
       expect(result.state.v, 200);
       expect(result.cursor.hasLaunched, isFalse);
     });
+
+    test(
+      'referencePositionPxが指定されている場合、信頼度が最高でなくても'
+      'その位置に最も近い候補で追跡を開始する',
+      () {
+        const tracker = BallKalmanTracker();
+        final candidates = [
+          // ユーザーがタップした位置から遠い、背景の別物体(信頼度は高い)
+          _detection(frameTimeMs: 0, u: 200, v: 200, confidence: 0.9),
+          // タップ位置に近い、本来の対象(信頼度はやや低い)
+          _detection(frameTimeMs: 0, u: 101, v: 99, confidence: 0.7),
+        ];
+
+        final result = tracker.step(
+          cursor: null,
+          candidatesAtFrame: candidates,
+          frameTimeMs: 0,
+          referencePositionPx: const Offset(100, 100),
+        );
+
+        expect(result.state.u, 101);
+        expect(result.state.v, 99);
+      },
+    );
 
     test('cursorがnullかつ信頼度条件を満たす候補が無い場合はArgumentErrorを投げる', () {
       const tracker = BallKalmanTracker(confidenceThreshold: 0.5);

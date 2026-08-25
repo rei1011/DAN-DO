@@ -6,11 +6,23 @@
 
 | 項目 | 内容 |
 |---|---|
-| モデル | `yolo26n`(Ultralyticsの公式COCO学習済みモデル、`ultralytics_yolo`パッケージ経由で初回自動ダウンロード) |
-| 検出クラス | `sports ball`(COCOの汎用クラス。ゴルフボール専用ではない) |
-| ライセンス | AGPL-3.0(`ultralytics_yolo`パッケージ自体のライセンスに準拠) |
+| モデル | `yolo26n`をベースに、golf-ball-detection-r3lqj(Roboflow Universe)のデータセットで自前ファインチューニングしたカスタムモデル(`assets/models/best.mlpackage.zip`) |
+| 検出クラス | `Golf-ball`(単一クラス。学習済みモデルのメタデータから確認) |
+| 学習データ出典 | [golf-ball-detection-r3lqj](https://universe.roboflow.com/datario-c8sgs/golf-ball-detection-r3lqj)(Roboflow Universe、workspace: `datario-c8sgs`、project version 4) |
+| データセットのライセンス | **CC BY 4.0**(表示義務あり。再学習・再配布は許諾範囲内だが、アプリ内クレジット表記が必要。App Store公開前に正式なクレジット文言をプロジェクトページで確認し、アプリ内(設定画面や利用規約等)に「golf ball detection Dataset by [author], licensed under CC BY 4.0, sourced from Roboflow Universe (https://universe.roboflow.com/datario-c8sgs/golf-ball-detection-r3lqj)」相当の表記を追加すること。正確な著者名はClaude側からプロジェクトページへ自動アクセスできない制約があるため未確認 — 要ユーザー確認) |
+| 学習環境 | Google Colab(`yolo26n.pt`から100エポックでファインチューニング、`ultralytics`パッケージ標準の`model.train()`/`export()`使用) |
+| `ultralytics_yolo`パッケージ自体のライセンス | AGPL-3.0 |
 | 用途 | 個人開発・学習目的。将来App Store公開時は要再検討(`docs/implementation-plan-analysis-pipeline.md` 技術調査2.参照) |
-| 確認日 | 2026-08-24(Phase 1導入時) |
+| 確認日 | 2026-08-25(Phase 3.5: 自前ファインチューニングモデルへの差し替え) |
+
+## Phase 3.5: 自前ファインチューニングモデルへの差し替え(2026-08-25)
+
+Phase 1のCOCO汎用モデル(`yolo26n`、`sports ball`クラス)は実機動画解析で検出精度不足が判明したため、golf-ball-detection-r3lqjのデータセットで`yolo26n`を自前ファインチューニングしたカスタムモデルに差し替えた。詳細な調査経緯は[roboflow-model-investigation-guide.md](roboflow-model-investigation-guide.md)を参照。
+
+- 判断日: 2026-08-25
+- 変更内容: `lib/data/ml/ball_detector.dart`のモデルロードを公式`yolo26n`自動ダウンロードからカスタムモデル(`assets/models/best.mlpackage.zip`、Flutter asset経由でiOSにロード)に変更。クラス名フィルタも`sports ball`→`Golf-ball`に変更
+- 現状の制約: このリポジトリには`android`プラットフォームフォルダが存在せず、iOS専用構成。Android対応時は`best.tflite`の配置方法(Flutter asset or `android/app/src/main/assets/`)を別途検討する
+- 未対応: `lib/core/tracking_constants.dart`の閾値は実機での新モデル検証結果を踏まえて調整する想定(今回は変更なし)
 
 ## Phase 3: Roboflow Universe公開モデルへの差し替え検討(見送り)
 

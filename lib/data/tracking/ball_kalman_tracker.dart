@@ -50,12 +50,16 @@ class BallKalmanTracker {
   const BallKalmanTracker({
     this.confidenceThreshold = TrackingConstants.confidenceThreshold,
     this.gatingRadiusPx = TrackingConstants.gatingRadiusPx,
+    this.minDiameterRatio = TrackingConstants.minDiameterRatio,
+    this.maxDiameterRatio = TrackingConstants.maxDiameterRatio,
     this.launchSpeedThresholdPxPerSecond =
         TrackingConstants.launchSpeedThresholdPxPerSecond,
   });
 
   final double confidenceThreshold;
   final double gatingRadiusPx;
+  final double minDiameterRatio;
+  final double maxDiameterRatio;
   final double launchSpeedThresholdPxPerSecond;
 
   /// 位置補正のゲイン(alpha)。予測と観測の残差をどれだけ位置に反映するか。
@@ -64,7 +68,10 @@ class BallKalmanTracker {
   /// 速度補正のゲイン(beta)。残差をどれだけ速度推定の更新に反映するか。
   static const double _velocityGain = 0.3;
 
-  List<TrackedBallState> track(List<RawBallDetection> detections) {
+  List<TrackedBallState> track(
+    List<RawBallDetection> detections, {
+    Offset? referencePositionPx,
+  }) {
     final byFrameTimeMs = <int, List<RawBallDetection>>{};
     for (final detection in detections) {
       (byFrameTimeMs[detection.frameTimeMs] ??= []).add(detection);
@@ -89,6 +96,7 @@ class BallKalmanTracker {
         cursor: cursor,
         candidatesAtFrame: candidates,
         frameTimeMs: frameTimeMs,
+        referencePositionPx: referencePositionPx,
       );
       cursor = result.cursor;
       states.add(result.state);
@@ -100,14 +108,18 @@ class BallKalmanTracker {
   /// 1フレーム分の検出候補からトラッカー状態を1ステップ進める。
   ///
   /// [cursor]が`null`の場合は追跡開始前とみなし、[candidatesAtFrame]の中で
-  /// 信頼度が[confidenceThreshold]以上の候補のうち最も信頼度が高いものを
-  /// 追跡開始点として採用する。信頼度条件を満たす候補が1件も無い状態で
+  /// 信頼度が[confidenceThreshold]以上の候補から追跡開始点を選ぶ。
+  /// [referencePositionPx](ユーザーがタップしたボール位置)が指定されていれば、
+  /// 背景に写り込んだ別のボール等を誤って追跡開始点に選ばないよう、
+  /// その位置に最も近い候補を採用する。指定が無ければ最も信頼度が高い候補を採用する
+  /// (後方互換のためのフォールバック)。信頼度条件を満たす候補が1件も無い状態で
   /// [cursor]が`null`のまま呼び出すことはできない(呼び出し側で候補が出るまで
   /// 呼び出しをスキップすること)。
   BallTrackerStepResult step({
     required BallTrackerCursor? cursor,
     required List<RawBallDetection> candidatesAtFrame,
     required int frameTimeMs,
+    Offset? referencePositionPx,
   }) {
     final candidates = candidatesAtFrame
         .where((d) => d.confidence >= confidenceThreshold)
@@ -120,9 +132,17 @@ class BallKalmanTracker {
           '1件以上必要です',
         );
       }
-      final best = candidates.reduce(
-        (a, b) => a.confidence >= b.confidence ? a : b,
-      );
+      final best = referencePositionPx != null
+          ? candidates.reduce(
+              (a, b) =>
+                  (a.centerPx - referencePositionPx).distanceSquared <=
+                      (b.centerPx - referencePositionPx).distanceSquared
+                  ? a
+                  : b,
+            )
+          : candidates.reduce(
+              (a, b) => a.confidence >= b.confidence ? a : b,
+            );
       final newCursor = BallTrackerCursor(
         u: best.centerPx.dx,
         v: best.centerPx.dy,
@@ -152,6 +172,10 @@ class BallKalmanTracker {
     RawBallDetection? matched;
     var matchedDistance = double.infinity;
     for (final candidate in candidates) {
+      final diameterRatio = candidate.diameterPx / cursor.diameterPx;
+      if (diameterRatio < minDiameterRatio || diameterRatio > maxDiameterRatio) {
+        continue;
+      }
       final dx = candidate.centerPx.dx - predictedU;
       final dy = candidate.centerPx.dy - predictedV;
       final distance = math.sqrt(dx * dx + dy * dy);

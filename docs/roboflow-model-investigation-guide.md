@@ -99,16 +99,24 @@ Phase 3では「自前学習は元々スコープ外」と判断していたが(
 - Hosted APIはレイテンシの観点で動画解析用途に不向き
 - golf-ball-detection-r3lqj(CC BY 4.0、ライセンス上再学習・再配布に問題なし)は、ゴルフボール検出そのものについては実機検証済みで精度が確認できている
 
-**未着手のTODO**:
+**進捗(2026-08-25)**:
 
-1. golf-ball-detection-r3lqjのDatasetタブから学習データをダウンロード(CC BY 4.0なのでデータセットDL自体は無料枠でできる想定。要ブラウザ確認)
-2. 学習環境の確定(Google Colab想定で調整中。実際のGPU学習実行はユーザー側で行う前提、Claude側はノートブック/スクリプトを用意する)
-3. YOLOファインチューニング用のColabノートブック作成(Claude側で対応)
-   - ベースモデルは現行踏襲で`yolo26n`系を想定(要検討: Ultralyticsの対応状況次第で変わる可能性あり)
-   - 学習後、`.tflite`(Android)・`.mlpackage`(iOS)へのエクスポート手順を含める
-4. アプリへの組み込み実装(Claude側で対応)
-   - `lib/data/ml/ball_detector.dart`: カスタムモデルロード(`YOLO(modelPath: 'assets/models/xxx.tflite')`)への変更、クラス名フィルタの変更
-   - Android: `android/app/src/main/assets/`とクロスプラットフォーム`assets/models/`の両方にモデル配置(既知のパス不整合[Issue #281](https://github.com/ultralytics/yolo-flutter-app/issues/281)の回避策、事前調査セクション参照)
-   - iOS: `.mlpackage`をXcodeプロジェクトに追加
-   - `lib/core/tracking_constants.dart`の閾値再チューニング
-5. `docs/model-provenance.md`への差し替え記録・ライセンス表記(CC BY 4.0の表示義務)の追記
+1. ✅ golf-ball-detection-r3lqjのDatasetタブから「Download dataset」→「YOLO26」形式→「Show download code」でダウンロード用コードスニペット取得済み(ユーザー側で保存済み)
+2. ✅ 学習環境はGoogle Colabに決定。**ノートブック本体はリポジトリに含めず、Google Drive/Colab上でユーザーが管理する方針**(APIキーやデータセットZIPが混ざるリスクを避けるため)
+3. ✅ ベースモデルは`yolo26n`(nano)に決定。Ultralytics YOLO26は`pip install ultralytics`の標準パッケージで学習・検証・エクスポート(train/val/export)がフルサポートされていることを確認済み([Ultralytics YOLO26 Docs](https://docs.ultralytics.com/models/yolo26))。
+4. ✅ Colab上でファインチューニング完了。ノートブックの構成は以下の通り(チャット上でユーザーに提供したセル構成、実行済み):
+   - データDL(Roboflowスニペット、`rf.workspace("datario-c8sgs").project("golf-ball-detection-r3lqj").version(4).download("yolo26")`)
+   - `model.train(data=f"{dataset.location}/data.yaml", model="yolo26n.pt", epochs=100, imgsz=640, batch=16, patience=20, project="golf-ball-finetune", name="yolo26n-golfball")`
+   - `model.val()`で検証
+   - `.tflite`(Android向け)・`.mlpackage`(iOS向け)へのエクスポート
+   - 成果物をZIPにまとめてダウンロード
+   - **ハマりどころ**: 使用したUltralyticsのバージョンでは、`project="golf-ball-finetune"`と指定してもデフォルトの`runs/detect/`配下にネストされ、実際の保存先は`/content/runs/detect/golf-ball-finetune/yolo26n-golfball/weights/`だった(想定していた`golf-ball-finetune/yolo26n-golfball/weights/`ではなかった)。`!find / -iname "best.pt"`で実際のパスを特定して対処。次回同様の作業をする際は、学習セル直後に`print(results.save_dir)`で実際の保存先を確認するとよい。
+   - ダウンロードしたZIPの中身: `best.pt`(PyTorch重み、保管用)、`best.tflite`(Android用)、`best.mlpackage`(iOS用)、`last.pt`(最終エポックのチェックポイント、`best.pt`があれば不要)。想定通りの構成で取得完了。
+5. ✅ アプリへの組み込み実装(2026-08-25、iOS分のみ完了)
+   - **事前調査時点の想定からアップデート**: `ultralytics_yolo` 0.6.13の公式ドキュメントを確認したところ、iOSでは`.mlpackage`をZIP化して`assets/models/`に置くFlutter asset方式(`assets/models/best.mlpackage.zip`)が使えると判明し、**Xcodeでの手動追加は不要だった**(当初想定を修正)
+   - `assets/models/best.mlpackage.zip`を配置し、`pubspec.yaml`の`flutter.assets`に追加
+   - `lib/data/ml/ball_detector.dart`: `YOLO(modelPath: 'assets/models/best.mlpackage.zip')`へ変更、クラス名フィルタを`sports ball`→`Golf-ball`(モデルのメタデータ`{0: 'Golf-ball'}`から確認)に変更
+   - **Android未対応**: このリポジトリには現時点で`android`プラットフォームフォルダ自体が存在しない(iOS専用構成)。`best.tflite`は将来Android platform追加時のために手元に保管しておくこと。追加時は本ドキュメント冒頭の[Issue #281](https://github.com/ultralytics/yolo-flutter-app/issues/281)の回避策と、`ultralytics_yolo`公式ドキュメント(`doc/models.md`)の配置ルールを再確認する
+   - 🔜 `lib/core/tracking_constants.dart`の閾値再チューニングは未着手。実機でのカスタムモデル検証結果を見てから調整する
+   - 実機検証で発生した「解析中画面から遷移しない」問題の調査・修正内容は[investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)にまとめた(トラッカーのバグ2件を修正。インパクト前後の遮蔽・高速移動という設計上の限界は未解決で対応方針を検討中)
+6. ✅ `docs/model-provenance.md`への差し替え記録・ライセンス表記を追記済み。ただしCC BY 4.0の正式なクレジット文言(著者名など)は未確認(Claude側からプロジェクトページへ自動アクセスできないため) — **App Store公開前にユーザーがプロジェクトページで確認する必要あり**
