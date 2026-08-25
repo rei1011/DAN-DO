@@ -101,10 +101,12 @@ class _ResultScreenState extends State<ResultScreen> {
             key: const Key('trajectoryChart'),
             height: 200,
             child: CustomPaint(
-              painter: TrajectoryPainter([
-                ...widget.result.measuredTrajectory,
-                ...widget.result.simulatedTrajectory,
-              ]..sort((a, b) => a.z.compareTo(b.z))),
+              painter: TrajectoryPainter(
+                [
+                  ...widget.result.measuredTrajectory,
+                  ...widget.result.simulatedTrajectory,
+                ]..sort((a, b) => a.z.compareTo(b.z)),
+              ),
               size: Size.infinite,
             ),
           ),

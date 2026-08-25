@@ -8,7 +8,10 @@ class RoiDecision {
     : centerPx = center,
       useFullFrame = false;
 
-  const RoiDecision.fullFrame() : centerPx = null, cropSizePx = 0, useFullFrame = true;
+  const RoiDecision.fullFrame()
+    : centerPx = null,
+      cropSizePx = 0,
+      useFullFrame = true;
 
   final Offset? centerPx;
   final double cropSizePx;
@@ -29,7 +32,8 @@ class RoiSequencer {
     if (searchCenterPx == null) {
       return const RoiDecision.fullFrame();
     }
-    if (consecutiveLostFrames >= RoiConstants.maxLostFramesBeforeFullFrameFallback) {
+    if (consecutiveLostFrames >=
+        RoiConstants.maxLostFramesBeforeFullFrameFallback) {
       return const RoiDecision.fullFrame();
     }
     return RoiDecision.crop(center: searchCenterPx, cropSizePx: cropSizePx);

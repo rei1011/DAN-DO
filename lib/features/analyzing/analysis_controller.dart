@@ -21,9 +21,6 @@ class AnalysisController extends _$AnalysisController {
   @override
   Future<ShotResult> build(XFile video, Offset initialBallPositionPx) async {
     final service = await ref.watch(shotAnalysisServiceProvider.future);
-    return service.analyze(
-      video,
-      initialBallPositionPx: initialBallPositionPx,
-    );
+    return service.analyze(video, initialBallPositionPx: initialBallPositionPx);
   }
 }

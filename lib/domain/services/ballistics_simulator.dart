@@ -121,24 +121,17 @@ class BallisticsSimulator {
 
       final nextPosition =
           position +
-          (k1.dPosition +
-                  k2.dPosition * 2 +
-                  k3.dPosition * 2 +
-                  k4.dPosition) *
+          (k1.dPosition + k2.dPosition * 2 + k3.dPosition * 2 + k4.dPosition) *
               (dt / 6);
       final nextVelocity =
           velocity +
-          (k1.dVelocity +
-                  k2.dVelocity * 2 +
-                  k3.dVelocity * 2 +
-                  k4.dVelocity) *
+          (k1.dVelocity + k2.dVelocity * 2 + k3.dVelocity * 2 + k4.dVelocity) *
               (dt / 6);
 
       if (nextPosition.y <= 0) {
         final ratio = position.y / (position.y - nextPosition.y);
         final landingT = t + dt * ratio;
-        final landingPosition =
-            position + (nextPosition - position) * ratio;
+        final landingPosition = position + (nextPosition - position) * ratio;
         points.add(
           TrajectoryPoint(
             t: landingT,

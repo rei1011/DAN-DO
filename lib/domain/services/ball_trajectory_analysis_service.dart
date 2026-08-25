@@ -150,9 +150,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     }
 
     if (frameWidthPx == null) {
-      throw const InsufficientTrajectoryDataException(
-        '動画からフレームを取得できませんでした',
-      );
+      throw const InsufficientTrajectoryDataException('動画からフレームを取得できませんでした');
     }
 
     return buildShotResult(detections: detections, frameWidthPx: frameWidthPx);
@@ -184,9 +182,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
         .toList();
 
     if (addressStates.isEmpty) {
-      throw const InsufficientTrajectoryDataException(
-        'アドレス区間でボールを検出できませんでした',
-      );
+      throw const InsufficientTrajectoryDataException('アドレス区間でボールを検出できませんでした');
     }
     if (launchStates.length < 2) {
       throw const InsufficientTrajectoryDataException(
