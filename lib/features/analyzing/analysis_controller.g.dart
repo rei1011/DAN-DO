@@ -18,7 +18,7 @@ final class AnalysisControllerProvider
     required AnalysisControllerFamily super.from,
     required (XFile, Offset) super.argument,
   }) : super(
-         retry: null,
+         retry: analysisRetryPolicy,
          name: r'analysisControllerProvider',
          isAutoDispose: true,
          dependencies: null,
@@ -51,7 +51,7 @@ final class AnalysisControllerProvider
 }
 
 String _$analysisControllerHash() =>
-    r'd09b762481a6165cd213c5bf1e6ab9e5faac0d18';
+    r'6a666fc3612644edbced38091c17f7c8dcf55437';
 
 final class AnalysisControllerFamily extends $Family
     with
@@ -64,7 +64,7 @@ final class AnalysisControllerFamily extends $Family
         > {
   AnalysisControllerFamily._()
     : super(
-        retry: null,
+        retry: analysisRetryPolicy,
         name: r'analysisControllerProvider',
         dependencies: null,
         $allTransitiveDependencies: null,

@@ -19,7 +19,8 @@ void main() {
       final decision = RoiSequencer.decideNextRoi(
         searchCenterPx: const Offset(100, 200),
         cropSizePx: RoiConstants.trackingCropSizePx,
-        consecutiveLostFrames: RoiConstants.maxLostFramesBeforeFullFrameFallback - 1,
+        consecutiveLostFrames:
+            RoiConstants.maxLostFramesBeforeFullFrameFallback - 1,
       );
 
       expect(decision.useFullFrame, isFalse);
@@ -31,7 +32,8 @@ void main() {
       final decision = RoiSequencer.decideNextRoi(
         searchCenterPx: const Offset(100, 200),
         cropSizePx: RoiConstants.trackingCropSizePx,
-        consecutiveLostFrames: RoiConstants.maxLostFramesBeforeFullFrameFallback,
+        consecutiveLostFrames:
+            RoiConstants.maxLostFramesBeforeFullFrameFallback,
       );
 
       expect(decision.useFullFrame, isTrue);

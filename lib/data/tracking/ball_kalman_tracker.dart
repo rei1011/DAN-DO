@@ -235,9 +235,7 @@ class BallKalmanTracker {
       du: newCursor.du,
       dv: newCursor.dv,
       diameterPx: newCursor.diameterPx,
-      phase: hasLaunched
-          ? BallTrackingPhase.launch
-          : BallTrackingPhase.address,
+      phase: hasLaunched ? BallTrackingPhase.launch : BallTrackingPhase.address,
     );
     return BallTrackerStepResult(cursor: newCursor, state: state);
   }

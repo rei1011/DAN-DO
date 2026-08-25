@@ -121,10 +121,7 @@ class _FramePickerState extends State<_FramePicker> {
         if (image == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        final imageSize = Size(
-          image.width.toDouble(),
-          image.height.toDouble(),
-        );
+        final imageSize = Size(image.width.toDouble(), image.height.toDouble());
 
         return Column(
           children: [
