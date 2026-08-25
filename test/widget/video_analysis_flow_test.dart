@@ -171,11 +171,10 @@ void main() {
     // AnalyzingScreen はエラー確定後もCircularProgressIndicatorの
     // 無限アニメーションが残り得るため、pumpAndSettle は使わず
     // 画面遷移が完了するまで有限回だけ pump する。
-    // Riverpodのデフォルトリトライ(Exceptionはerror is Errorに該当せず
-    // 対象となる)は最大10回・合計約38.2秒(200ms*2^n、6400ms上限)の
-    // 指数バックオフを行うため、確定失敗までの猶予を十分に確保する
-    // (fake clockのため実時間としては一瞬で進む)。
-    for (var i = 0; i < 50; i++) {
+    // analysisControllerProviderはanalysisRetryPolicyによりリトライを3回
+    // (200ms+400ms+800ms=1.4秒)に制限しているため、確定失敗までの猶予を
+    // 十分に確保する(fake clockのため実時間としては一瞬で進む)。
+    for (var i = 0; i < 10; i++) {
       await tester.pump(const Duration(seconds: 1));
       if (find
           .byKey(const Key('backToVideoSelectButton'))

@@ -68,8 +68,12 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     var cropSizePx = RoiConstants.initialCropSizePx;
     BallTrackerCursor? roiCursor;
     var consecutiveLostFrames = 0;
+    var frameCount = 0;
+    var fullFrameCount = 0;
+    var maxConfidence = 0.0;
 
     for (var t = Duration.zero; t < duration; t += frameInterval) {
+      frameCount++;
       final frameBytes = await frameSource.frameAt(t);
       frameWidthPx ??= await _decodeFrameWidthPx(frameBytes);
 
@@ -81,6 +85,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
 
       List<RawBallDetection> frameDetections;
       if (decision.useFullFrame) {
+        fullFrameCount++;
         frameDetections = await ballDetector.detect(frameBytes, frameTime: t);
       } else {
         final cropped = await FrameCropper.crop(
@@ -98,11 +103,17 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
       }
 
       detections.addAll(frameDetections);
+      for (final d in frameDetections) {
+        if (d.confidence > maxConfidence) {
+          maxConfidence = d.confidence;
+        }
+      }
 
       final hasConfidentCandidate = frameDetections.any(
         (d) => d.confidence >= tracker.confidenceThreshold,
       );
       if (roiCursor == null && !hasConfidentCandidate) {
+        consecutiveLostFrames++;
         continue;
       }
       final stepResult = tracker.step(
@@ -121,8 +132,22 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     }
 
     debugPrint(
-      'BallTrajectoryAnalysisService: sports ball detections=${detections.length}',
+      'BallTrajectoryAnalysisService: frames=$frameCount '
+      'fullFrame=$fullFrameCount detections=${detections.length} '
+      'maxConfidence=${maxConfidence.toStringAsFixed(3)} '
+      'cursorEstablished=${roiCursor != null}',
     );
+    final sortedByTime = [...detections]
+      ..sort((a, b) => a.frameTimeMs.compareTo(b.frameTimeMs));
+    for (final d in sortedByTime) {
+      debugPrint(
+        'BallTrajectoryAnalysisService: detection t=${d.frameTimeMs}ms '
+        'confidence=${d.confidence.toStringAsFixed(3)} '
+        'center=(${d.centerPx.dx.toStringAsFixed(0)},'
+        '${d.centerPx.dy.toStringAsFixed(0)}) '
+        'diameterPx=${d.diameterPx.toStringAsFixed(1)}',
+      );
+    }
 
     if (frameWidthPx == null) {
       throw const InsufficientTrajectoryDataException(

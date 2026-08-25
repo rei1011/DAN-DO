@@ -385,5 +385,105 @@ void main() {
         expect(result.measuredTrajectory, isNotEmpty);
       },
     );
+
+    test(
+      'roiCursorがnullのまま確信度不足の検出が5フレーム連続しても'
+      'フルフレーム探索にフォールバックし、再検出後はクロップ探索に復帰する',
+      () async {
+        // idx0-4: 初期クロップ(240px)内で確信度不足(0.1)の検出のみが続き、
+        //         roiCursorはnullのまま(トラッキング未確立)。
+        //         修正前はこの分岐でconsecutiveLostFramesが更新されず、
+        //         フォールバックが永久に発生しなかった
+        //         (docs/todo-analysis-pipeline.mdのフォローアップ課題)。
+        // idx5: 修正後はconsecutiveLostFrames==5に達し、フルフレーム探索
+        //       (2000px)にフォールバックするはず。検出はフルフレームで
+        //       呼ばれた場合にのみ返すようスクリプトし、
+        //       フォールバックが実際に発生したことを直接検証する。
+        // idx6: アドレス確立後なので、クロップ探索(160px)に復帰するはず。
+        assert(
+          RoiConstants.maxLostFramesBeforeFullFrameFallback == 5,
+          'このテストはmaxLostFramesBeforeFullFrameFallback=5を前提にしている',
+        );
+        const totalCalls = 7;
+
+        List<RawBallDetection> script({
+          required int callIndex,
+          required Duration frameTime,
+          required int imageWidth,
+          required int imageHeight,
+        }) {
+          if (callIndex <= 4) {
+            return [
+              RawBallDetection(
+                frameTimeMs: frameTime.inMilliseconds,
+                centerPx: Offset(imageWidth / 2, imageHeight / 2),
+                diameterPx: 20,
+                confidence: 0.1,
+              ),
+            ];
+          }
+          if (callIndex == 5) {
+            if (imageWidth != frameWidth) {
+              // まだフルフレーム探索にフォールバックしていなければ検出無し。
+              return const [];
+            }
+            return [
+              RawBallDetection(
+                frameTimeMs: frameTime.inMilliseconds,
+                centerPx: initialBallPositionPx,
+                diameterPx: 20,
+                confidence: 0.9,
+              ),
+            ];
+          }
+          return [
+            RawBallDetection(
+              frameTimeMs: frameTime.inMilliseconds,
+              centerPx: Offset(imageWidth / 2, imageHeight / 2),
+              diameterPx: 20,
+              confidence: 0.9,
+            ),
+          ];
+        }
+
+        final duration = BallTrajectoryAnalysisService.frameInterval *
+            totalCalls;
+        final service = buildService(script: script, duration: duration);
+        final detector = service.ballDetector as FakeBallDetector;
+
+        // 静止シナリオのため打球区間が無く、飛球区間不足の例外は許容する
+        // (このテストの目的はフォールバック挙動自体の検証であり、
+        // ShotResultの成否ではない)。
+        try {
+          await service.analyze(
+            XFile('fixture.mp4'),
+            initialBallPositionPx: initialBallPositionPx,
+          );
+        } on InsufficientTrajectoryDataException {
+          // 想定内: 静止シナリオでは飛球区間が発生しない。
+        }
+
+        expect(detector.callWidths, hasLength(totalCalls));
+        for (var i = 0; i <= 4; i++) {
+          expect(
+            detector.callWidths[i],
+            RoiConstants.initialCropSizePx.round(),
+            reason: 'callWidths[$i]はroiCursor未確立のクロップ探索(240px)のはず',
+          );
+        }
+        expect(
+          detector.callWidths[5],
+          frameWidth,
+          reason:
+              'roiCursorがnullのまま5回連続で確信度不足だった直後の呼び出しは'
+              'フルフレーム探索(2000px)にフォールバックするはず',
+        );
+        expect(
+          detector.callWidths[6],
+          RoiConstants.trackingCropSizePx.round(),
+          reason: '再検出後はクロップ探索(160px)に復帰するはず',
+        );
+      },
+    );
   });
 }
