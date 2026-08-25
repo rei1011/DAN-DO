@@ -94,4 +94,80 @@ void main() {
       expect(states[2].phase, BallTrackingPhase.lost);
     });
   });
+
+  group('BallKalmanTracker.step', () {
+    test('cursorがnullのとき、最も信頼度が高い候補で追跡を開始しaddressフェーズを返す', () {
+      const tracker = BallKalmanTracker();
+      final candidates = [
+        _detection(frameTimeMs: 0, u: 100, v: 100, confidence: 0.5),
+        _detection(frameTimeMs: 0, u: 200, v: 200, confidence: 0.9),
+      ];
+
+      final result = tracker.step(
+        cursor: null,
+        candidatesAtFrame: candidates,
+        frameTimeMs: 0,
+      );
+
+      expect(result.state.phase, BallTrackingPhase.address);
+      expect(result.state.u, 200);
+      expect(result.state.v, 200);
+      expect(result.cursor.hasLaunched, isFalse);
+    });
+
+    test('cursorがnullかつ信頼度条件を満たす候補が無い場合はArgumentErrorを投げる', () {
+      const tracker = BallKalmanTracker(confidenceThreshold: 0.5);
+
+      expect(
+        () => tracker.step(
+          cursor: null,
+          candidatesAtFrame: [
+            _detection(frameTimeMs: 0, u: 100, v: 100, confidence: 0.1),
+          ],
+          frameTimeMs: 0,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('cursorありで予測位置に近い候補があれば追跡を継続する', () {
+      const tracker = BallKalmanTracker();
+      const cursor = BallTrackerCursor(
+        u: 100,
+        v: 100,
+        du: 0,
+        dv: 0,
+        diameterPx: 20,
+        frameTimeMs: 0,
+        hasLaunched: false,
+      );
+
+      final result = tracker.step(
+        cursor: cursor,
+        candidatesAtFrame: [_detection(frameTimeMs: 33, u: 103, v: 98)],
+        frameTimeMs: 33,
+      );
+
+      expect(result.state.phase, BallTrackingPhase.address);
+      expect(result.state.u, closeTo(100, 5));
+      expect(result.cursor.frameTimeMs, 33);
+    });
+
+    test('BallTrackerCursor.predictedCenterPxは速度から次フレームの位置を外挿する', () {
+      const cursor = BallTrackerCursor(
+        u: 100,
+        v: 100,
+        du: 1000,
+        dv: 0,
+        diameterPx: 20,
+        frameTimeMs: 0,
+        hasLaunched: true,
+      );
+
+      final predicted = cursor.predictedCenterPx(33);
+
+      expect(predicted.dx, closeTo(133, 0.1));
+      expect(predicted.dy, closeTo(100, 0.1));
+    });
+  });
 }

@@ -3,7 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../data/video/image_picker_video_picker.dart';
 import '../../data/video/video_player_duration_reader.dart';
-import '../analyzing/analyzing_screen.dart';
+import '../ball_position/ball_position_picker_screen.dart';
 
 class VideoSelectScreen extends ConsumerStatefulWidget {
   const VideoSelectScreen({super.key});
@@ -47,7 +47,9 @@ class _VideoSelectScreenState extends ConsumerState<VideoSelectScreen> {
       if (!mounted) return;
       setState(() => _isPicking = false);
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => AnalyzingScreen(video: video)),
+        MaterialPageRoute(
+          builder: (_) => BallPositionPickerScreen(video: video),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

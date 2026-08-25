@@ -67,17 +67,26 @@
 元計画: [implementation-plan-roi-crop-detection.md](implementation-plan-roi-crop-detection.md)
 背景: [investigation-analyzing-screen-stuck.md](investigation-analyzing-screen-stuck.md) §6 対策案1
 
-- [ ] `FrameCropper`(`dart:ui`によるフレームクロップ+座標変換)実装+単体テスト
-- [ ] `RoiConstants`/`RoiSequencer`(次フレームのROI決定ロジック)実装+単体テスト
-- [ ] `BallKalmanTracker`に逐次ステップAPI(`step`/`BallTrackerCursor`)を追加するリファクタ(既存`track()`テストは無改修のまま通す)
-- [ ] `ShotAnalysisService`/`BallTrajectoryAnalysisService.analyze()`をROIベースの逐次検出+追跡ループに書き換え(`buildShotResult()`のシグネチャ・既存テストは変更しない)
-- [ ] `AnalysisController`/`AnalyzingScreen`に`initialBallPositionPx`を通す
-- [ ] `FirstFrameReader`(動画の最初のフレーム取得の抽象化)実装
-- [ ] タップ座標⇔画像ピクセル座標の変換関数(`tap_position_mapper.dart`)実装+単体テスト
-- [ ] `BallPositionPickerScreen`(タップでボール位置を指定する新規画面)実装、`VideoSelectScreen`からの導線を追加
-- [ ] E2Eウィジェットテスト(`video_analysis_flow_test.dart`)を新しい画面遷移(VideoSelect→BallPositionPicker→Analyzing→Result)に更新
-- [ ] Phase完了確認: `fvm flutter test`・`fvm dart analyze`が通ることを確認
+- [x] `FrameCropper`(`dart:ui`によるフレームクロップ+座標変換)実装+単体テスト
+- [x] `RoiConstants`/`RoiSequencer`(次フレームのROI決定ロジック)実装+単体テスト
+- [x] `BallKalmanTracker`に逐次ステップAPI(`step`/`BallTrackerCursor`)を追加するリファクタ(既存`track()`テストは無改修のまま通す)
+- [x] `ShotAnalysisService`/`BallTrajectoryAnalysisService.analyze()`をROIベースの逐次検出+追跡ループに書き換え(`buildShotResult()`のシグネチャ・既存テストは変更しない)
+- [x] `AnalysisController`/`AnalyzingScreen`に`initialBallPositionPx`を通す
+- [x] `FirstFrameReader`(動画の最初のフレーム取得の抽象化)実装
+- [x] タップ座標⇔画像ピクセル座標の変換関数(`tap_position_mapper.dart`)実装+単体テスト
+- [x] `BallPositionPickerScreen`(タップでボール位置を指定する新規画面)実装、`VideoSelectScreen`からの導線を追加
+- [x] E2Eウィジェットテスト(`video_analysis_flow_test.dart`)を新しい画面遷移(VideoSelect→BallPositionPicker→Analyzing→Result)に更新
+- [x] Phase完了確認: `fvm flutter test`・`fvm dart analyze`が通ることを確認
 - [ ] Phase完了確認: 実際のゴルフスイング動画(調査で使用した`IMG_3068.MOV`を含む)で、ROI導入前後の検出成功率・飛距離推定の妥当性を比較し、次フェーズ着手判断のための記録として残す(**実機iPhoneでの確認が必要なため、ユーザー側での実施が必要な項目として残っている**)
+
+### フォローアップ課題(PR #10統合時点で既知、未修正)
+
+- [ ] `consecutiveLostFrames`が`continue`分岐で更新されない不具合を修正する
+  - 症状: `lib/domain/services/ball_trajectory_analysis_service.dart`の`analyze()`ループで、`roiCursor == null`かつ確信度が閾値未満の検出しかない場合に`continue`する分岐があるが、この分岐では`consecutiveLostFrames`をインクリメントしていない
+  - 影響: アドレス区間(タップ直後、まだ確信度の高い検出が一度もない状態)でボールが検出され続けない場合、`consecutiveLostFrames`が閾値(`RoiConstants.maxLostFramesBeforeFullFrameFallback`)に達せず、全体フレーム探索へのフォールバックが機能しないまま、動画全体で同じ小さいクロップ範囲を探索し続けてしまう(トラッキング確立後にロストした場合のフォールバックは正しく動作する)
+  - 発見経緯: 最終ブランチ全体レビューで見つかったCritical/Important計4件の指摘をまとめて1回で修正した際、修正同士の組み合わせで新たに生じた回帰(修正ラウンドの運用上限に達したため、その場では再修正せずPRに既知の課題として記録した)
+  - 修正方針: `continue`分岐でも`consecutiveLostFrames`をインクリメントする(またはインクリメントの計算位置を`tracker.step()`呼び出し前に移し、`continue`より先に評価する)
+  - 対応: 別PRで修正する
 
 ## Phase 4(将来、今回は着手しない)
 

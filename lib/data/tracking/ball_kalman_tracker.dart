@@ -1,8 +1,45 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import '../../core/tracking_constants.dart';
 import '../../domain/models/raw_ball_detection.dart';
 import '../../domain/models/tracked_ball_state.dart';
+
+/// [BallKalmanTracker.step]がフレームをまたいで引き回す内部状態。
+/// [predictedCenterPx]をROI決定(次フレームのクロップ中心)に使う。
+class BallTrackerCursor {
+  const BallTrackerCursor({
+    required this.u,
+    required this.v,
+    required this.du,
+    required this.dv,
+    required this.diameterPx,
+    required this.frameTimeMs,
+    required this.hasLaunched,
+  });
+
+  final double u;
+  final double v;
+  final double du;
+  final double dv;
+  final double diameterPx;
+  final int frameTimeMs;
+  final bool hasLaunched;
+
+  /// 現在の位置・速度から、[atFrameTimeMs]時点の予測位置を等速直線運動で外挿する。
+  Offset predictedCenterPx(int atFrameTimeMs) {
+    final dtSeconds = (atFrameTimeMs - frameTimeMs) / 1000.0;
+    return Offset(u + du * dtSeconds, v + dv * dtSeconds);
+  }
+}
+
+/// [BallKalmanTracker.step]が返す、1フレーム分の更新結果。
+class BallTrackerStepResult {
+  const BallTrackerStepResult({required this.cursor, required this.state});
+
+  final BallTrackerCursor cursor;
+  final TrackedBallState state;
+}
 
 /// 手書きの簡易カルマンフィルタ(定速度モデル、g-h/alpha-betaフィルタ)による
 /// ボール位置の平滑化・誤検出のゲーティング・フェーズ判定を行う。
@@ -35,136 +72,149 @@ class BallKalmanTracker {
     final sortedFrameTimes = byFrameTimeMs.keys.toList()..sort();
 
     final states = <TrackedBallState>[];
-    _TrackState? current;
-    var hasLaunched = false;
+    BallTrackerCursor? cursor;
 
     for (final frameTimeMs in sortedFrameTimes) {
-      final candidates = byFrameTimeMs[frameTimeMs]!
-          .where((d) => d.confidence >= confidenceThreshold)
-          .toList();
+      final candidates = byFrameTimeMs[frameTimeMs]!;
 
-      if (current == null) {
-        if (candidates.isEmpty) continue;
-        final best = candidates.reduce(
-          (a, b) => a.confidence >= b.confidence ? a : b,
-        );
-        current = _TrackState(
-          u: best.centerPx.dx,
-          v: best.centerPx.dy,
-          du: 0,
-          dv: 0,
-          diameterPx: best.diameterPx,
-          frameTimeMs: frameTimeMs,
-        );
-        states.add(
-          TrackedBallState(
-            frameTimeMs: frameTimeMs,
-            u: current.u,
-            v: current.v,
-            du: current.du,
-            dv: current.dv,
-            diameterPx: current.diameterPx,
-            phase: BallTrackingPhase.address,
-          ),
-        );
+      if (cursor == null &&
+          candidates.every((d) => d.confidence < confidenceThreshold)) {
+        continue;
+      }
+      if (cursor != null && frameTimeMs - cursor.frameTimeMs <= 0) {
         continue;
       }
 
-      final dtSeconds = (frameTimeMs - current.frameTimeMs) / 1000.0;
-      if (dtSeconds <= 0) continue;
-
-      final predictedU = current.u + current.du * dtSeconds;
-      final predictedV = current.v + current.dv * dtSeconds;
-
-      RawBallDetection? matched;
-      var matchedDistance = double.infinity;
-      for (final candidate in candidates) {
-        final dx = candidate.centerPx.dx - predictedU;
-        final dy = candidate.centerPx.dy - predictedV;
-        final distance = math.sqrt(dx * dx + dy * dy);
-        if (distance <= gatingRadiusPx && distance < matchedDistance) {
-          matched = candidate;
-          matchedDistance = distance;
-        }
-      }
-
-      if (matched == null) {
-        current = _TrackState(
-          u: predictedU,
-          v: predictedV,
-          du: current.du,
-          dv: current.dv,
-          diameterPx: current.diameterPx,
-          frameTimeMs: frameTimeMs,
-        );
-        states.add(
-          TrackedBallState(
-            frameTimeMs: frameTimeMs,
-            u: current.u,
-            v: current.v,
-            du: current.du,
-            dv: current.dv,
-            diameterPx: current.diameterPx,
-            phase: BallTrackingPhase.lost,
-          ),
-        );
-        continue;
-      }
-
-      final residualU = matched.centerPx.dx - predictedU;
-      final residualV = matched.centerPx.dy - predictedV;
-
-      final newU = predictedU + _positionGain * residualU;
-      final newV = predictedV + _positionGain * residualV;
-      final newDu = current.du + (_velocityGain / dtSeconds) * residualU;
-      final newDv = current.dv + (_velocityGain / dtSeconds) * residualV;
-
-      final speed = math.sqrt(newDu * newDu + newDv * newDv);
-      if (!hasLaunched && speed > launchSpeedThresholdPxPerSecond) {
-        hasLaunched = true;
-      }
-
-      current = _TrackState(
-        u: newU,
-        v: newV,
-        du: newDu,
-        dv: newDv,
-        diameterPx: matched.diameterPx,
+      final result = step(
+        cursor: cursor,
+        candidatesAtFrame: candidates,
         frameTimeMs: frameTimeMs,
       );
-      states.add(
-        TrackedBallState(
-          frameTimeMs: frameTimeMs,
-          u: current.u,
-          v: current.v,
-          du: current.du,
-          dv: current.dv,
-          diameterPx: current.diameterPx,
-          phase: hasLaunched
-              ? BallTrackingPhase.launch
-              : BallTrackingPhase.address,
-        ),
-      );
+      cursor = result.cursor;
+      states.add(result.state);
     }
 
     return states;
   }
-}
 
-class _TrackState {
-  const _TrackState({
-    required this.u,
-    required this.v,
-    required this.du,
-    required this.dv,
-    required this.diameterPx,
-    required this.frameTimeMs,
-  });
+  /// 1フレーム分の検出候補からトラッカー状態を1ステップ進める。
+  ///
+  /// [cursor]が`null`の場合は追跡開始前とみなし、[candidatesAtFrame]の中で
+  /// 信頼度が[confidenceThreshold]以上の候補のうち最も信頼度が高いものを
+  /// 追跡開始点として採用する。信頼度条件を満たす候補が1件も無い状態で
+  /// [cursor]が`null`のまま呼び出すことはできない(呼び出し側で候補が出るまで
+  /// 呼び出しをスキップすること)。
+  BallTrackerStepResult step({
+    required BallTrackerCursor? cursor,
+    required List<RawBallDetection> candidatesAtFrame,
+    required int frameTimeMs,
+  }) {
+    final candidates = candidatesAtFrame
+        .where((d) => d.confidence >= confidenceThreshold)
+        .toList();
 
-  final double u;
-  final double v;
-  final double du;
-  final double dv;
-  final double diameterPx;
-  final int frameTimeMs;
+    if (cursor == null) {
+      if (candidates.isEmpty) {
+        throw ArgumentError(
+          'cursorがnullの場合、candidatesAtFrameに信頼度条件を満たす候補が'
+          '1件以上必要です',
+        );
+      }
+      final best = candidates.reduce(
+        (a, b) => a.confidence >= b.confidence ? a : b,
+      );
+      final newCursor = BallTrackerCursor(
+        u: best.centerPx.dx,
+        v: best.centerPx.dy,
+        du: 0,
+        dv: 0,
+        diameterPx: best.diameterPx,
+        frameTimeMs: frameTimeMs,
+        hasLaunched: false,
+      );
+      final state = TrackedBallState(
+        frameTimeMs: frameTimeMs,
+        u: newCursor.u,
+        v: newCursor.v,
+        du: newCursor.du,
+        dv: newCursor.dv,
+        diameterPx: newCursor.diameterPx,
+        phase: BallTrackingPhase.address,
+      );
+      return BallTrackerStepResult(cursor: newCursor, state: state);
+    }
+
+    final dtSeconds = (frameTimeMs - cursor.frameTimeMs) / 1000.0;
+    final predicted = cursor.predictedCenterPx(frameTimeMs);
+    final predictedU = predicted.dx;
+    final predictedV = predicted.dy;
+
+    RawBallDetection? matched;
+    var matchedDistance = double.infinity;
+    for (final candidate in candidates) {
+      final dx = candidate.centerPx.dx - predictedU;
+      final dy = candidate.centerPx.dy - predictedV;
+      final distance = math.sqrt(dx * dx + dy * dy);
+      if (distance <= gatingRadiusPx && distance < matchedDistance) {
+        matched = candidate;
+        matchedDistance = distance;
+      }
+    }
+
+    if (matched == null) {
+      final newCursor = BallTrackerCursor(
+        u: predictedU,
+        v: predictedV,
+        du: cursor.du,
+        dv: cursor.dv,
+        diameterPx: cursor.diameterPx,
+        frameTimeMs: frameTimeMs,
+        hasLaunched: cursor.hasLaunched,
+      );
+      final state = TrackedBallState(
+        frameTimeMs: frameTimeMs,
+        u: newCursor.u,
+        v: newCursor.v,
+        du: newCursor.du,
+        dv: newCursor.dv,
+        diameterPx: newCursor.diameterPx,
+        phase: BallTrackingPhase.lost,
+      );
+      return BallTrackerStepResult(cursor: newCursor, state: state);
+    }
+
+    final residualU = matched.centerPx.dx - predictedU;
+    final residualV = matched.centerPx.dy - predictedV;
+
+    final newU = predictedU + _positionGain * residualU;
+    final newV = predictedV + _positionGain * residualV;
+    final newDu = cursor.du + (_velocityGain / dtSeconds) * residualU;
+    final newDv = cursor.dv + (_velocityGain / dtSeconds) * residualV;
+
+    final speed = math.sqrt(newDu * newDu + newDv * newDv);
+    final hasLaunched =
+        cursor.hasLaunched || speed > launchSpeedThresholdPxPerSecond;
+
+    final newCursor = BallTrackerCursor(
+      u: newU,
+      v: newV,
+      du: newDu,
+      dv: newDv,
+      diameterPx: matched.diameterPx,
+      frameTimeMs: frameTimeMs,
+      hasLaunched: hasLaunched,
+    );
+    final state = TrackedBallState(
+      frameTimeMs: frameTimeMs,
+      u: newCursor.u,
+      v: newCursor.v,
+      du: newCursor.du,
+      dv: newCursor.dv,
+      diameterPx: newCursor.diameterPx,
+      phase: hasLaunched
+          ? BallTrackingPhase.launch
+          : BallTrackingPhase.address,
+    );
+    return BallTrackerStepResult(cursor: newCursor, state: state);
+  }
 }

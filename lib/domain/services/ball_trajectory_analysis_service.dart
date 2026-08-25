@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 import 'dart:ui' as ui;
 
 import 'package:cross_file/cross_file.dart';
@@ -6,8 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/assumed_camera_intrinsics.dart';
+import '../../core/roi_constants.dart';
 import '../../data/ml/ball_detector.dart';
 import '../../data/ml/ball_detector_provider.dart';
+import '../../data/ml/frame_cropper.dart';
 import '../../data/tracking/ball_kalman_tracker.dart';
 import '../../data/video/get_thumbnail_video_frame_source.dart';
 import '../../data/video/video_duration_reader.dart';
@@ -20,6 +23,7 @@ import '../models/trajectory_point.dart';
 import 'ballistics_simulator.dart';
 import 'distance_estimation.dart';
 import 'launch_parameter_estimator.dart';
+import 'roi_sequencer.dart';
 import 'shot_analysis_service.dart';
 
 part 'ball_trajectory_analysis_service.g.dart';
@@ -40,6 +44,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
     required this.ballDetector,
     required this.videoDurationReader,
     required this.frameSourceFactory,
+    this.tracker = const BallKalmanTracker(),
   });
 
   static const frameInterval = Duration(milliseconds: 33);
@@ -47,18 +52,72 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
   final BallDetector ballDetector;
   final VideoDurationReader videoDurationReader;
   final VideoFrameSource Function(XFile video) frameSourceFactory;
+  final BallKalmanTracker tracker;
 
   @override
-  Future<ShotResult> analyze(XFile video) async {
+  Future<ShotResult> analyze(
+    XFile video, {
+    required Offset initialBallPositionPx,
+  }) async {
     final duration = await videoDurationReader.read(video);
     final frameSource = frameSourceFactory(video);
 
     final detections = <RawBallDetection>[];
     double? frameWidthPx;
+    Offset? searchCenterPx = initialBallPositionPx;
+    var cropSizePx = RoiConstants.initialCropSizePx;
+    BallTrackerCursor? roiCursor;
+    var consecutiveLostFrames = 0;
+
     for (var t = Duration.zero; t < duration; t += frameInterval) {
       final frameBytes = await frameSource.frameAt(t);
       frameWidthPx ??= await _decodeFrameWidthPx(frameBytes);
-      detections.addAll(await ballDetector.detect(frameBytes, frameTime: t));
+
+      final decision = RoiSequencer.decideNextRoi(
+        searchCenterPx: searchCenterPx,
+        cropSizePx: cropSizePx,
+        consecutiveLostFrames: consecutiveLostFrames,
+      );
+
+      List<RawBallDetection> frameDetections;
+      if (decision.useFullFrame) {
+        frameDetections = await ballDetector.detect(frameBytes, frameTime: t);
+      } else {
+        final cropped = await FrameCropper.crop(
+          frameBytes,
+          centerPx: decision.centerPx!,
+          cropSizePx: decision.cropSizePx,
+        );
+        final rawDetections = await ballDetector.detect(
+          cropped.bytes,
+          frameTime: t,
+        );
+        frameDetections = rawDetections
+            .map((d) => FrameCropper.translateDetection(d, cropped.offsetPx))
+            .toList();
+      }
+
+      detections.addAll(frameDetections);
+
+      final hasConfidentCandidate = frameDetections.any(
+        (d) => d.confidence >= tracker.confidenceThreshold,
+      );
+      if (roiCursor == null && !hasConfidentCandidate) {
+        continue;
+      }
+      final stepResult = tracker.step(
+        cursor: roiCursor,
+        candidatesAtFrame: frameDetections,
+        frameTimeMs: t.inMilliseconds,
+      );
+      consecutiveLostFrames =
+          (frameDetections.isEmpty ||
+              stepResult.state.phase == BallTrackingPhase.lost)
+          ? consecutiveLostFrames + 1
+          : 0;
+      roiCursor = stepResult.cursor;
+      searchCenterPx = Offset(roiCursor.u, roiCursor.v);
+      cropSizePx = RoiConstants.trackingCropSizePx;
     }
 
     debugPrint(
