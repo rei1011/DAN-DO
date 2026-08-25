@@ -20,20 +20,13 @@ class LaunchParameterEstimator {
       );
     }
 
-    final vx = _linearRegressionSlope(
-      points.map((p) => (p.t, p.x)).toList(),
-    );
-    final vy = _linearRegressionSlope(
-      points.map((p) => (p.t, p.y)).toList(),
-    );
-    final vz = _linearRegressionSlope(
-      points.map((p) => (p.t, p.z)).toList(),
-    );
+    final vx = _linearRegressionSlope(points.map((p) => (p.t, p.x)).toList());
+    final vy = _linearRegressionSlope(points.map((p) => (p.t, p.y)).toList());
+    final vz = _linearRegressionSlope(points.map((p) => (p.t, p.z)).toList());
 
     final v0 = math.sqrt(vx * vx + vy * vy + vz * vz);
     final horizontalSpeed = math.sqrt(vx * vx + vz * vz);
-    final launchAngleDegrees =
-        math.atan2(vy, horizontalSpeed) * 180 / math.pi;
+    final launchAngleDegrees = math.atan2(vy, horizontalSpeed) * 180 / math.pi;
     final launchDirectionDegrees = math.atan2(vx, vz) * 180 / math.pi;
 
     return (
