@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/assumed_camera_intrinsics.dart';
+import '../../core/club_constants.dart';
 import '../../core/roi_constants.dart';
 import '../../data/ml/ball_detector.dart';
 import '../../data/ml/ball_detector_provider.dart';
@@ -58,6 +59,7 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
   Future<ShotResult> analyze(
     XFile video, {
     required Offset initialBallPositionPx,
+    required ClubType clubType,
   }) async {
     final duration = await videoDurationReader.read(video);
     final frameSource = frameSourceFactory(video);

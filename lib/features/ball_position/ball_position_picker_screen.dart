@@ -5,6 +5,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../core/club_constants.dart';
 import '../../data/video/first_frame_reader.dart';
 import '../analyzing/analyzing_screen.dart';
 import 'tap_position_mapper.dart';
@@ -52,9 +53,11 @@ class _BallPositionPickerScreenState
                 ? null
                 : () => Navigator.of(context).push<void>(
                     MaterialPageRoute(
+                      // TODO(Phase5): クラブ種別選択画面から実際の選択値を渡す。
                       builder: (_) => AnalyzingScreen(
                         video: widget.video,
                         initialBallPositionPx: _tappedImagePx!,
+                        clubType: ClubType.driver,
                       ),
                     ),
                   ),

@@ -16,4 +16,10 @@ class BallisticsConstants {
 
   /// 仮定サイドスピン量(rpm)。正値はスライス方向(進行方向に対して右)を表す目安値。
   static const double assumedSidespinRpm = 300;
+
+  /// フェース・トゥ・パス1度あたりのサイドスピン換算量(rpm/度、目安値)。
+  ///
+  /// `faceToPathDegrees * sidespinRpmPerFaceToPathDegree`でサイドスピン量を推定する。
+  /// 実機データでの補正を前提とした目安値。
+  static const double sidespinRpmPerFaceToPathDegree = 200;
 }

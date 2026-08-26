@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cross_file/cross_file.dart';
+import 'package:dan_do/core/club_constants.dart';
 import 'package:dan_do/data/video/first_frame_reader.dart';
 import 'package:dan_do/data/video/image_picker_video_picker.dart';
 import 'package:dan_do/data/video/video_player_duration_reader.dart';
@@ -25,6 +26,7 @@ class _ThrowingShotAnalysisService implements ShotAnalysisService {
   Future<ShotResult> analyze(
     XFile video, {
     required Offset initialBallPositionPx,
+    required ClubType clubType,
   }) async {
     throw Exception('解析エラーのテスト用');
   }
