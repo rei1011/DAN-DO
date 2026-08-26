@@ -72,10 +72,14 @@ Future<void> _pickVideoAndTapBallPosition(WidgetTester tester) async {
   await tester.pump();
 
   await tester.tap(find.byKey(const Key('confirmBallPositionButton')));
+  await tester.pumpAndSettle();
+
+  // ClubSelectionScreenへの画面遷移(MaterialPageRouteのトランジション)を待ってから選択する。
+  await tester.tap(find.byKey(const Key('clubTypeOption_driver')));
 }
 
 void main() {
-  testWidgets('動画選択→ボール位置指定→解析中→結果画面まで遷移する', (tester) async {
+  testWidgets('動画選択→ボール位置指定→クラブ種別選択→解析中→結果画面まで遷移する', (tester) async {
     final fixtureVideo = XFile('fixture.mp4');
     // _makeTestFramePngはdart:uiの実処理(toImage/toByteData)を使うため、
     // FakeAsyncのテストゾーン内では直接呼ばずrunAsyncで実行する。

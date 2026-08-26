@@ -10,18 +10,16 @@ import '../../core/assumed_camera_intrinsics.dart';
 import '../../core/club_constants.dart';
 import '../../core/roi_constants.dart';
 import '../../data/ml/ball_detector.dart';
-import '../../data/ml/ball_detector_provider.dart';
 import '../../data/ml/frame_cropper.dart';
 import '../../data/tracking/ball_kalman_tracker.dart';
-import '../../data/video/get_thumbnail_video_frame_source.dart';
 import '../../data/video/video_duration_reader.dart';
 import '../../data/video/video_frame_source.dart';
-import '../../data/video/video_player_duration_reader.dart';
 import '../models/raw_ball_detection.dart';
 import '../models/shot_result.dart';
 import '../models/tracked_ball_state.dart';
 import '../models/trajectory_point.dart';
 import 'ballistics_simulator.dart';
+import 'club_swing_analysis_service.dart';
 import 'distance_estimation.dart';
 import 'launch_parameter_estimator.dart';
 import 'roi_sequencer.dart';
@@ -270,13 +268,6 @@ class BallTrajectoryAnalysisService implements ShotAnalysisService {
 }
 
 @riverpod
-Future<ShotAnalysisService> shotAnalysisService(Ref ref) async {
-  final detector = await ref.watch(ballDetectorProvider.future);
-  final durationReader = ref.watch(videoDurationReaderProvider);
-
-  return BallTrajectoryAnalysisService(
-    ballDetector: detector,
-    videoDurationReader: durationReader,
-    frameSourceFactory: GetThumbnailVideoFrameSource.new,
-  );
+Future<ShotAnalysisService> shotAnalysisService(Ref ref) {
+  return ref.watch(clubSwingAnalysisServiceProvider.future);
 }

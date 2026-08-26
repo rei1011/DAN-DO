@@ -49,4 +49,4 @@ final class ShotAnalysisServiceProvider
 }
 
 String _$shotAnalysisServiceHash() =>
-    r'4948ed19481327a2e229344cf4901f0671436b1c';
+    r'732241869e4aea5c58586dcac062e377ce0d70ed';

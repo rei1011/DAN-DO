@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 実装中(Phase 1〜Phase 4完了、Phase 5着手前)
+- ステータス: 実装中(Phase 1〜Phase 5完了、Phase 6着手前)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -233,14 +233,29 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 
 ### Phase 5: UI統合・既存フローの置き換え
 
-- [ ] クラブ種別選択画面を新設(`lib/features/club_selection/`)
-- [ ] 動画選択 → ボール位置指定 → クラブ種別選択 → 解析、の画面遷移に組み込む
-- [ ] `shotAnalysisServiceProvider`の実装を`ClubSwingAnalysisService`に切り替える(`BallTrajectoryAnalysisService`は削除せずテスト・参考実装として残す)
-- [ ] Phase完了確認: 実機で一連の画面遷移(動画選択→クラブ種別選択→ボール位置指定→解析→結果表示)が動くことを確認
-- [ ] Phase完了確認: `fvm flutter analyze`・`fvm flutter test`が通ることを確認
+- [x] クラブ種別選択画面を新設(`lib/features/club_selection/`)
+- [x] 動画選択 → ボール位置指定 → クラブ種別選択 → 解析、の画面遷移に組み込む
+- [x] `shotAnalysisServiceProvider`の実装を`ClubSwingAnalysisService`に切り替える(`BallTrajectoryAnalysisService`は削除せずテスト・参考実装として残す)
+- [x] Phase完了確認: 実機で一連の画面遷移(動画選択→ボール位置指定→クラブ種別選択→解析→結果表示)が動くことを確認
+- [x] Phase完了確認: `fvm flutter analyze`・`fvm flutter test`が通ることを確認
+
+**実装状況(2026-08-26)**: 画面遷移の順序は、本セクション記載の2箇所の食い違い(TODOリストは「ボール位置指定→クラブ種別選択」、旧Phase完了確認は「クラブ種別選択→ボール位置指定」)についてユーザーに確認し、**「動画選択→ボール位置指定→クラブ種別選択→解析」の順序(前者)** を採用した。Phase 2で作成したデバッグ画面`lib/features/club_detector_debug/`は、ユーザー確認の上、今回は削除せず残している。
+
+具体的な実装:
+
+- `lib/features/club_selection/club_selection_screen.dart`(新規): `StatelessWidget`。`ClubType.values`をリスト表示し、タップした種別で`AnalyzingScreen`へ`push`する。表示ラベルはこの画面内にのみ持つ(`ClubConstants`側にはUI文言を持ち込まない)
+- `lib/features/ball_position/ball_position_picker_screen.dart`(変更): `ConsumerStatefulWidget`から`HookConsumerWidget`(内部の`_FramePicker`は`HookWidget`)へ移行(`.claude/rules/flutter-widget-hooks.md`が移行対象として明記していたファイルのため、本Phaseでの変更を機に完了)。確定ボタン押下時の遷移先を`AnalyzingScreen`直接から`ClubSelectionScreen`に変更し、`TODO(Phase5)`コメントと`ClubType.driver`固定値を除去
+- `lib/domain/services/ball_trajectory_analysis_service.dart`の`shotAnalysisServiceProvider`: 実装本体をPhase 4で追加済みの`clubSwingAnalysisServiceProvider`への委譲(`ref.watch(clubSwingAnalysisServiceProvider.future)`)に変更。`BallTrajectoryAnalysisService`クラス自体・`clubSwingAnalysisServiceProvider`はどちらも変更せず残置
+- テスト: `test/features/club_selection/club_selection_screen_test.dart`を新設(2件: 5種類の選択肢表示、タップ時に正しい`ClubType`で`AnalyzingScreen`へ遷移)。既存の`test/widget/video_analysis_flow_test.dart`は、`confirmBallPositionButton`タップ後に`clubTypeOption_driver`をタップするヘルパー修正を行った。`fvm flutter analyze`・`fvm flutter test`(70件)は全てパス(既存の`ball_detector.dart`の`unnecessary_import`指摘のみ残存、Phase5範囲外)
+- 実機(iPhone 15 Proシミュレータ)での一連の画面遷移確認は、自動化されたUIタップ操作がmacOSのアクセシビリティ権限不足で実行できなかったため、ユーザーが手動でシミュレータを操作して確認した
+
+**実機検証で発見・修正したバグ(2026-08-26)**: ユーザーが実際のスイング動画で解析フローを試したところ、`ClubSwingAnalysisException: クラブヘッドを検出できませんでした`(手順2で検出0件)が発生した。調査の結果、これはPhase5の画面遷移ロジックの不具合ではなく、**`BallDetector`と`ClubDetector`が同じ`ultralytics_yolo`パッケージの既定チャンネル(`'default'`、`useMultiInstance`未指定時の共有スロット)を使っていたため、2つの別モデルが同時に使われる`ClubSwingAnalysisService`(Phase4で新設)において、後からロードされた方のモデルしか実質的に有効にならない**という実装バグだった。これまで「ボール検出のみ」「クラブ検出のみ」を別々に使う経路(`BallTrajectoryAnalysisService`、Phase2デバッグ画面)しか実機検証していなかったため発覚しなかった。`lib/data/ml/ball_detector.dart`・`lib/data/ml/club_detector.dart`の`YOLO`コンストラクタに`useMultiInstance: true`を追加して修正し、再検証で両モデルが正しく動作することを確認した(実機ログで確認: ClubDetector単体でhead 30件/handle 39件、修正後のClubSwingAnalysisService経由でもhead 352件/handle 472件を検出)。
+
+**Phase6に持ち越す既知の課題(2026-08-26)**: 上記バグ修正後の実機再検証で、手順5(インパクト直後のボール検出)が`ClubSwingAnalysisException: インパクト直後のボールを検出できませんでした`で失敗する事象を確認した。実機ログとテスト動画のコマ送り確認により、この動画はカメラを低い位置・近距離に設置しておりアドレス時のボールが画面上わずか15〜20px程度と小さいことが判明した。インパクト直後のボールは低いカメラアングルの遠近効果も相まって画面内を素早く移動するため、現在の`RoiConstants.postImpactBallSearchCropSizePx`(500px)・`postImpactBallSearchFrameCount`(5)では捕捉しきれていない可能性が高い。セクション6に記載の通りこれらは「目安値、要実機検証での調整」であり、Phase6(実機検証・定数チューニング)で対応する想定(ユーザー確認済み)。
 
 ### Phase 6: 実機検証・定数チューニング
 
 - [ ] 実際のスイング動画で一連のフローがエラーなく完走することを確認
+  - 既知の未解決課題(Phase5末尾の完了メモ参照): `RoiConstants.postImpactBallSearchCropSizePx`(500px)・`postImpactBallSearchFrameCount`(5)が、カメラを低い位置・近距離に設置した動画では不足し、インパクト直後のボール検出が0件になるケースを確認済み。クロップサイズ・フレーム数の拡大、またはインパクトフレーム推定精度の見直しから着手する
 - [ ] 弾道の見た目の妥当性(可能であれば実測値)と比較し、`sidespinRpmPerFaceToPathDegree`・スマッシュファクター表を補正
 - [ ] 本ドキュメントのセクション10(リスク・フォールバック方針)を、実機検証結果を踏まえて更新(精度が実用に耐えるか、フォールバックが必要かを記録)
