@@ -258,307 +258,304 @@ void main() {
     expect(result.simulatedTrajectory, isNotEmpty);
   });
 
-  test(
-    '通常のクロップでは検出2点未満でも、フォールバックの広いクロップで'
-    '2点以上検出できればShotResultが得られる(Phase6)',
-    () async {
-      const headPositions = [
-        ui.Offset(1000, 1000), // idx0: アドレス
-        ui.Offset(900, 850), // idx1: バックスイング
-        ui.Offset(700, 700), // idx2: バックスイングのピーク
-        ui.Offset(850, 900), // idx3: ダウンスイング
-        ui.Offset(1005, 1000), // idx4: インパクト(アドレス位置に最接近)
-        ui.Offset(1150, 1100), // idx5: フォロースルー
-        ui.Offset(1300, 1200), // idx6: フォロースルー継続
-      ];
-      const handleOffsets = [
-        ui.Offset(0, 150),
-        ui.Offset(10, 140),
-        ui.Offset(-20, 160),
-        ui.Offset(15, 130),
-        ui.Offset(5, 120),
-      ];
-      const clubFrameCount = 7;
-      final duration = frameInterval * (clubFrameCount + 20);
+  test('通常のクロップでは検出2点未満でも、フォールバックの広いクロップで'
+      '2点以上検出できればShotResultが得られる(Phase6)', () async {
+    const headPositions = [
+      ui.Offset(1000, 1000), // idx0: アドレス
+      ui.Offset(900, 850), // idx1: バックスイング
+      ui.Offset(700, 700), // idx2: バックスイングのピーク
+      ui.Offset(850, 900), // idx3: ダウンスイング
+      ui.Offset(1005, 1000), // idx4: インパクト(アドレス位置に最接近)
+      ui.Offset(1150, 1100), // idx5: フォロースルー
+      ui.Offset(1300, 1200), // idx6: フォロースルー継続
+    ];
+    const handleOffsets = [
+      ui.Offset(0, 150),
+      ui.Offset(10, 140),
+      ui.Offset(-20, 160),
+      ui.Offset(15, 130),
+      ui.Offset(5, 120),
+    ];
+    const clubFrameCount = 7;
+    final duration = frameInterval * (clubFrameCount + 20);
 
-      List<RawClubDetection> clubScript({
-        required int callIndex,
-        required Duration frameTime,
-      }) {
-        if (callIndex >= headPositions.length) {
-          return const [];
-        }
-        final head = headPositions[callIndex];
-        final detections = [
+    List<RawClubDetection> clubScript({
+      required int callIndex,
+      required Duration frameTime,
+    }) {
+      if (callIndex >= headPositions.length) {
+        return const [];
+      }
+      final head = headPositions[callIndex];
+      final detections = [
+        RawClubDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: head,
+          confidence: 0.9,
+          part: ClubPart.head,
+        ),
+      ];
+      if (callIndex < handleOffsets.length) {
+        detections.add(
           RawClubDetection(
             frameTimeMs: frameTime.inMilliseconds,
-            centerPx: head,
+            centerPx: head + handleOffsets[callIndex],
             confidence: 0.9,
-            part: ClubPart.head,
+            part: ClubPart.handle,
           ),
-        ];
-        if (callIndex < handleOffsets.length) {
-          detections.add(
-            RawClubDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: head + handleOffsets[callIndex],
-              confidence: 0.9,
-              part: ClubPart.handle,
-            ),
-          );
-        }
-        return detections;
+        );
       }
+      return detections;
+    }
 
-      // 通常のクロップサイズ(800px)では検出0件、フォールバックの広いクロップ
-      // (frameWidth=2000にクランプされ2000px)でのみ検出できるケースを模す。
-      List<RawBallDetection> ballScript({
-        required int callIndex,
-        required Duration frameTime,
-        required int imageWidth,
-        required int imageHeight,
-      }) {
-        if (callIndex == 0) {
-          return [
-            RawBallDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
-              diameterPx: 20,
-              confidence: 0.9,
-            ),
-          ];
-        }
-        if (imageWidth <= 800) {
-          return const [];
-        }
-        final k = callIndex;
-        return [
-          RawBallDetection(
-            frameTimeMs: frameTime.inMilliseconds,
-            centerPx: ui.Offset(imageWidth / 2 + k * 12, imageHeight / 2 - k * 30),
-            diameterPx: 18 - k * 0.5,
-            confidence: 0.9,
-          ),
-        ];
-      }
-
-      final service = buildService(
-        ballScript: ballScript,
-        clubScript: clubScript,
-        duration: duration,
-      );
-
-      final result = await service.analyze(
-        XFile('fixture.mp4'),
-        initialBallPositionPx: initialBallPositionPx,
-        clubType: ClubType.driver,
-      );
-
-      expect(result.carryDistanceMeters, greaterThan(0));
-      expect(result.measuredTrajectory, isNotEmpty);
-      expect(result.simulatedTrajectory, isNotEmpty);
-    },
-  );
-
-  test(
-    'アドレス時のボールと直径が大きく異なる検出(無関係な物体)しか無い場合は'
-    'ClubSwingAnalysisExceptionを投げる(実機で確認された誤検出の再現、Phase6)',
-    () async {
-      const headPositions = [
-        ui.Offset(1000, 1000),
-        ui.Offset(900, 850),
-        ui.Offset(700, 700),
-        ui.Offset(850, 900),
-        ui.Offset(1005, 1000),
-      ];
-      const handleOffsets = [
-        ui.Offset(0, 150),
-        ui.Offset(10, 140),
-        ui.Offset(-20, 160),
-        ui.Offset(15, 130),
-        ui.Offset(5, 120),
-      ];
-      const clubFrameCount = 7;
-      final duration = frameInterval * (clubFrameCount + 20);
-
-      List<RawClubDetection> clubScript({
-        required int callIndex,
-        required Duration frameTime,
-      }) {
-        if (callIndex >= headPositions.length) {
-          return const [];
-        }
-        final head = headPositions[callIndex];
-        final detections = [
-          RawClubDetection(
-            frameTimeMs: frameTime.inMilliseconds,
-            centerPx: head,
-            confidence: 0.9,
-            part: ClubPart.head,
-          ),
-        ];
-        if (callIndex < handleOffsets.length) {
-          detections.add(
-            RawClubDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: head + handleOffsets[callIndex],
-              confidence: 0.9,
-              part: ClubPart.handle,
-            ),
-          );
-        }
-        return detections;
-      }
-
-      // アドレス時のボール(diameterPx=20)に対し、実機で確認された誤検出
-      // (手前に転がる無関係なボール、diameterPx=150前後・ほぼ静止)を再現する。
-      List<RawBallDetection> ballScript({
-        required int callIndex,
-        required Duration frameTime,
-        required int imageWidth,
-        required int imageHeight,
-      }) {
-        if (callIndex == 0) {
-          return [
-            RawBallDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
-              diameterPx: 20,
-              confidence: 0.9,
-            ),
-          ];
-        }
+    // 通常のクロップサイズ(800px)では検出0件、フォールバックの広いクロップ
+    // (frameWidth=2000にクランプされ2000px)でのみ検出できるケースを模す。
+    List<RawBallDetection> ballScript({
+      required int callIndex,
+      required Duration frameTime,
+      required int imageWidth,
+      required int imageHeight,
+    }) {
+      if (callIndex == 0) {
         return [
           RawBallDetection(
             frameTimeMs: frameTime.inMilliseconds,
             centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
-            diameterPx: 150,
-            confidence: 0.45,
+            diameterPx: 20,
+            confidence: 0.9,
           ),
         ];
       }
-
-      final service = buildService(
-        ballScript: ballScript,
-        clubScript: clubScript,
-        duration: duration,
-      );
-
-      await expectLater(
-        service.analyze(
-          XFile('fixture.mp4'),
-          initialBallPositionPx: initialBallPositionPx,
-          clubType: ClubType.driver,
+      if (imageWidth <= 800) {
+        return const [];
+      }
+      final k = callIndex;
+      return [
+        RawBallDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: ui.Offset(
+            imageWidth / 2 + k * 12,
+            imageHeight / 2 - k * 30,
+          ),
+          diameterPx: 18 - k * 0.5,
+          confidence: 0.9,
         ),
-        throwsA(isA<ClubSwingAnalysisException>()),
-      );
-    },
-  );
-
-  test(
-    '無関係な物体(直径が大きく異なる検出)が混在していても、'
-    'サイズが妥当な検出だけを使ってShotResultが得られる(Phase6)',
-    () async {
-      const headPositions = [
-        ui.Offset(1000, 1000),
-        ui.Offset(900, 850),
-        ui.Offset(700, 700),
-        ui.Offset(850, 900),
-        ui.Offset(1005, 1000),
-        ui.Offset(1150, 1100),
-        ui.Offset(1300, 1200),
       ];
-      const handleOffsets = [
-        ui.Offset(0, 150),
-        ui.Offset(10, 140),
-        ui.Offset(-20, 160),
-        ui.Offset(15, 130),
-        ui.Offset(5, 120),
-      ];
-      const clubFrameCount = 7;
-      final duration = frameInterval * (clubFrameCount + 20);
+    }
 
-      List<RawClubDetection> clubScript({
-        required int callIndex,
-        required Duration frameTime,
-      }) {
-        if (callIndex >= headPositions.length) {
-          return const [];
-        }
-        final head = headPositions[callIndex];
-        final detections = [
+    final service = buildService(
+      ballScript: ballScript,
+      clubScript: clubScript,
+      duration: duration,
+    );
+
+    final result = await service.analyze(
+      XFile('fixture.mp4'),
+      initialBallPositionPx: initialBallPositionPx,
+      clubType: ClubType.driver,
+    );
+
+    expect(result.carryDistanceMeters, greaterThan(0));
+    expect(result.measuredTrajectory, isNotEmpty);
+    expect(result.simulatedTrajectory, isNotEmpty);
+  });
+
+  test('アドレス時のボールと直径が大きく異なる検出(無関係な物体)しか無い場合は'
+      'ClubSwingAnalysisExceptionを投げる(実機で確認された誤検出の再現、Phase6)', () async {
+    const headPositions = [
+      ui.Offset(1000, 1000),
+      ui.Offset(900, 850),
+      ui.Offset(700, 700),
+      ui.Offset(850, 900),
+      ui.Offset(1005, 1000),
+    ];
+    const handleOffsets = [
+      ui.Offset(0, 150),
+      ui.Offset(10, 140),
+      ui.Offset(-20, 160),
+      ui.Offset(15, 130),
+      ui.Offset(5, 120),
+    ];
+    const clubFrameCount = 7;
+    final duration = frameInterval * (clubFrameCount + 20);
+
+    List<RawClubDetection> clubScript({
+      required int callIndex,
+      required Duration frameTime,
+    }) {
+      if (callIndex >= headPositions.length) {
+        return const [];
+      }
+      final head = headPositions[callIndex];
+      final detections = [
+        RawClubDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: head,
+          confidence: 0.9,
+          part: ClubPart.head,
+        ),
+      ];
+      if (callIndex < handleOffsets.length) {
+        detections.add(
           RawClubDetection(
             frameTimeMs: frameTime.inMilliseconds,
-            centerPx: head,
+            centerPx: head + handleOffsets[callIndex],
             confidence: 0.9,
-            part: ClubPart.head,
+            part: ClubPart.handle,
           ),
-        ];
-        if (callIndex < handleOffsets.length) {
-          detections.add(
-            RawClubDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: head + handleOffsets[callIndex],
-              confidence: 0.9,
-              part: ClubPart.handle,
-            ),
-          );
-        }
-        return detections;
+        );
       }
+      return detections;
+    }
 
-      List<RawBallDetection> ballScript({
-        required int callIndex,
-        required Duration frameTime,
-        required int imageWidth,
-        required int imageHeight,
-      }) {
-        if (callIndex == 0) {
-          return [
-            RawBallDetection(
-              frameTimeMs: frameTime.inMilliseconds,
-              centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
-              diameterPx: 20,
-              confidence: 0.9,
-            ),
-          ];
-        }
-        final k = callIndex;
+    // アドレス時のボール(diameterPx=20)に対し、実機で確認された誤検出
+    // (手前に転がる無関係なボール、diameterPx=150前後・ほぼ静止)を再現する。
+    List<RawBallDetection> ballScript({
+      required int callIndex,
+      required Duration frameTime,
+      required int imageWidth,
+      required int imageHeight,
+    }) {
+      if (callIndex == 0) {
         return [
-          // 無関係な物体(手前に転がる静止したボール等)。
           RawBallDetection(
             frameTimeMs: frameTime.inMilliseconds,
-            centerPx: ui.Offset(imageWidth / 2 - 300, imageHeight / 2 + 300),
-            diameterPx: 150,
-            confidence: 0.45,
-          ),
-          // 実際に飛んでいるボール(サイズが妥当)。
-          RawBallDetection(
-            frameTimeMs: frameTime.inMilliseconds,
-            centerPx: ui.Offset(imageWidth / 2 + k * 12, imageHeight / 2 - k * 30),
-            diameterPx: 18 - k * 0.5,
+            centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
+            diameterPx: 20,
             confidence: 0.9,
           ),
         ];
       }
+      return [
+        RawBallDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
+          diameterPx: 150,
+          confidence: 0.45,
+        ),
+      ];
+    }
 
-      final service = buildService(
-        ballScript: ballScript,
-        clubScript: clubScript,
-        duration: duration,
-      );
+    final service = buildService(
+      ballScript: ballScript,
+      clubScript: clubScript,
+      duration: duration,
+    );
 
-      final result = await service.analyze(
+    await expectLater(
+      service.analyze(
         XFile('fixture.mp4'),
         initialBallPositionPx: initialBallPositionPx,
         clubType: ClubType.driver,
-      );
+      ),
+      throwsA(isA<ClubSwingAnalysisException>()),
+    );
+  });
 
-      expect(result.carryDistanceMeters, greaterThan(0));
-      expect(result.measuredTrajectory, isNotEmpty);
-      expect(result.simulatedTrajectory, isNotEmpty);
-    },
-  );
+  test('無関係な物体(直径が大きく異なる検出)が混在していても、'
+      'サイズが妥当な検出だけを使ってShotResultが得られる(Phase6)', () async {
+    const headPositions = [
+      ui.Offset(1000, 1000),
+      ui.Offset(900, 850),
+      ui.Offset(700, 700),
+      ui.Offset(850, 900),
+      ui.Offset(1005, 1000),
+      ui.Offset(1150, 1100),
+      ui.Offset(1300, 1200),
+    ];
+    const handleOffsets = [
+      ui.Offset(0, 150),
+      ui.Offset(10, 140),
+      ui.Offset(-20, 160),
+      ui.Offset(15, 130),
+      ui.Offset(5, 120),
+    ];
+    const clubFrameCount = 7;
+    final duration = frameInterval * (clubFrameCount + 20);
+
+    List<RawClubDetection> clubScript({
+      required int callIndex,
+      required Duration frameTime,
+    }) {
+      if (callIndex >= headPositions.length) {
+        return const [];
+      }
+      final head = headPositions[callIndex];
+      final detections = [
+        RawClubDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: head,
+          confidence: 0.9,
+          part: ClubPart.head,
+        ),
+      ];
+      if (callIndex < handleOffsets.length) {
+        detections.add(
+          RawClubDetection(
+            frameTimeMs: frameTime.inMilliseconds,
+            centerPx: head + handleOffsets[callIndex],
+            confidence: 0.9,
+            part: ClubPart.handle,
+          ),
+        );
+      }
+      return detections;
+    }
+
+    List<RawBallDetection> ballScript({
+      required int callIndex,
+      required Duration frameTime,
+      required int imageWidth,
+      required int imageHeight,
+    }) {
+      if (callIndex == 0) {
+        return [
+          RawBallDetection(
+            frameTimeMs: frameTime.inMilliseconds,
+            centerPx: ui.Offset(imageWidth / 2, imageHeight / 2),
+            diameterPx: 20,
+            confidence: 0.9,
+          ),
+        ];
+      }
+      final k = callIndex;
+      return [
+        // 無関係な物体(手前に転がる静止したボール等)。
+        RawBallDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: ui.Offset(imageWidth / 2 - 300, imageHeight / 2 + 300),
+          diameterPx: 150,
+          confidence: 0.45,
+        ),
+        // 実際に飛んでいるボール(サイズが妥当)。
+        RawBallDetection(
+          frameTimeMs: frameTime.inMilliseconds,
+          centerPx: ui.Offset(
+            imageWidth / 2 + k * 12,
+            imageHeight / 2 - k * 30,
+          ),
+          diameterPx: 18 - k * 0.5,
+          confidence: 0.9,
+        ),
+      ];
+    }
+
+    final service = buildService(
+      ballScript: ballScript,
+      clubScript: clubScript,
+      duration: duration,
+    );
+
+    final result = await service.analyze(
+      XFile('fixture.mp4'),
+      initialBallPositionPx: initialBallPositionPx,
+      clubType: ClubType.driver,
+    );
+
+    expect(result.carryDistanceMeters, greaterThan(0));
+    expect(result.measuredTrajectory, isNotEmpty);
+    expect(result.simulatedTrajectory, isNotEmpty);
+  });
 
   test('クラブヘッドが1件も検出できない場合はClubSwingAnalysisExceptionを投げる', () async {
     List<RawBallDetection> ballScript({
