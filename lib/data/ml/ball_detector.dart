@@ -15,8 +15,16 @@ class ModelLoadException implements Exception {
 }
 
 class BallDetector {
+  // useMultiInstance: trueが無いと、YOLOの既定チャンネル('default')をClubDetector
+  // (別のカスタムモデル)と共有してしまい、片方のモデルしか実際には推論されなくなる。
   BallDetector({YOLO? yolo})
-    : _yolo = yolo ?? YOLO(modelPath: customModelPath, task: YOLOTask.detect);
+    : _yolo =
+          yolo ??
+          YOLO(
+            modelPath: customModelPath,
+            task: YOLOTask.detect,
+            useMultiInstance: true,
+          );
 
   /// golf-ball-detection-r3lqj(Roboflow Universe、CC BY 4.0)のデータセットで
   /// yolo26nをファインチューニングしたカスタムモデル(詳細: docs/model-provenance.md)。

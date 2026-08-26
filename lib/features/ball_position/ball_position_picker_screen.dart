@@ -3,40 +3,30 @@ import 'dart:ui' as ui;
 
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../core/club_constants.dart';
 import '../../data/video/first_frame_reader.dart';
-import '../analyzing/analyzing_screen.dart';
+import '../club_selection/club_selection_screen.dart';
 import 'tap_position_mapper.dart';
 
-class BallPositionPickerScreen extends ConsumerStatefulWidget {
+class BallPositionPickerScreen extends HookConsumerWidget {
   const BallPositionPickerScreen({super.key, required this.video});
 
   final XFile video;
 
   @override
-  ConsumerState<BallPositionPickerScreen> createState() =>
-      _BallPositionPickerScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tappedImagePx = useState<Offset?>(null);
+    final frameFuture = useMemoized(
+      () => ref.read(firstFrameReaderProvider).read(video),
+      [video],
+    );
 
-class _BallPositionPickerScreenState
-    extends ConsumerState<BallPositionPickerScreen> {
-  Offset? _tappedImagePx;
-  late final Future<Uint8List> _frameFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _frameFuture = ref.read(firstFrameReaderProvider).read(widget.video);
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('ボール位置を指定')),
       body: FutureBuilder<Uint8List>(
-        future: _frameFuture,
+        future: frameFuture,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('フレームの取得に失敗しました: ${snapshot.error}'));
@@ -47,17 +37,15 @@ class _BallPositionPickerScreenState
           }
           return _FramePicker(
             bytes: bytes,
-            tappedImagePx: _tappedImagePx,
-            onTapped: (px) => setState(() => _tappedImagePx = px),
-            onConfirm: _tappedImagePx == null
+            tappedImagePx: tappedImagePx.value,
+            onTapped: (px) => tappedImagePx.value = px,
+            onConfirm: tappedImagePx.value == null
                 ? null
                 : () => Navigator.of(context).push<void>(
                     MaterialPageRoute(
-                      // TODO(Phase5): クラブ種別選択画面から実際の選択値を渡す。
-                      builder: (_) => AnalyzingScreen(
-                        video: widget.video,
-                        initialBallPositionPx: _tappedImagePx!,
-                        clubType: ClubType.driver,
+                      builder: (_) => ClubSelectionScreen(
+                        video: video,
+                        ballPositionPx: tappedImagePx.value!,
                       ),
                     ),
                   ),
@@ -68,7 +56,7 @@ class _BallPositionPickerScreenState
   }
 }
 
-class _FramePicker extends StatefulWidget {
+class _FramePicker extends HookWidget {
   const _FramePicker({
     required this.bytes,
     required this.tappedImagePx,
@@ -81,41 +69,27 @@ class _FramePicker extends StatefulWidget {
   final ValueChanged<Offset> onTapped;
   final VoidCallback? onConfirm;
 
-  @override
-  State<_FramePicker> createState() => _FramePickerState();
-}
-
-class _FramePickerState extends State<_FramePicker> {
-  late final Future<ui.Image> _imageFuture;
-  ui.Image? _decodedImage;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = _decodeImage(widget.bytes);
-  }
-
-  Future<ui.Image> _decodeImage(Uint8List bytes) async {
+  static Future<ui.Image> _decodeImage(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     codec.dispose();
-    // 表示にはwidget.bytesをImage.memoryで直接使うため、このui.Imageは
-    // 座標変換用のwidth/height取得にしか使わない。dispose()で解放するため
-    // ここでは保持のみ行う。
-    _decodedImage = frame.image;
     return frame.image;
   }
 
   @override
-  void dispose() {
-    _decodedImage?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final imageFuture = useMemoized(() => _decodeImage(bytes), [bytes]);
+
+    // 表示にはbytesをImage.memoryで直接使うため、このui.Imageは座標変換用の
+    // width/height取得にしか使わない。デコード結果は破棄時にdispose()で解放する。
+    useEffect(() {
+      ui.Image? decoded;
+      imageFuture.then((image) => decoded = image);
+      return () => decoded?.dispose();
+    }, [bytes]);
+
     return FutureBuilder<ui.Image>(
-      future: _imageFuture,
+      future: imageFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('画像のデコードに失敗しました: ${snapshot.error}'));
@@ -134,7 +108,7 @@ class _FramePickerState extends State<_FramePicker> {
                   final displaySize = constraints.biggest;
                   return GestureDetector(
                     key: const Key('ballPositionImage'),
-                    onTapDown: (details) => widget.onTapped(
+                    onTapDown: (details) => onTapped(
                       mapDisplayPositionToImagePx(
                         localPosition: details.localPosition,
                         displaySize: displaySize,
@@ -144,10 +118,10 @@ class _FramePickerState extends State<_FramePicker> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.memory(widget.bytes, fit: BoxFit.contain),
-                        if (widget.tappedImagePx != null)
+                        Image.memory(bytes, fit: BoxFit.contain),
+                        if (tappedImagePx != null)
                           _Marker(
-                            imagePx: widget.tappedImagePx!,
+                            imagePx: tappedImagePx!,
                             displaySize: displaySize,
                             imageSize: imageSize,
                           ),
@@ -161,7 +135,7 @@ class _FramePickerState extends State<_FramePicker> {
               padding: const EdgeInsets.all(16),
               child: ElevatedButton(
                 key: const Key('confirmBallPositionButton'),
-                onPressed: widget.onConfirm,
+                onPressed: onConfirm,
                 child: const Text('この位置で解析する'),
               ),
             ),

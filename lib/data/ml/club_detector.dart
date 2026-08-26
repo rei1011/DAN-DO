@@ -5,8 +5,16 @@ import '../../domain/models/raw_club_detection.dart';
 import 'ball_detector.dart';
 
 class ClubDetector {
+  // useMultiInstance: trueが無いと、YOLOの既定チャンネル('default')をBallDetector
+  // (別のカスタムモデル)と共有してしまい、片方のモデルしか実際には推論されなくなる。
   ClubDetector({YOLO? yolo})
-    : _yolo = yolo ?? YOLO(modelPath: customModelPath, task: YOLOTask.detect);
+    : _yolo =
+          yolo ??
+          YOLO(
+            modelPath: customModelPath,
+            task: YOLOTask.detect,
+            useMultiInstance: true,
+          );
 
   /// Golf Driver Tracker(Roboflow Universe、CC BY 4.0)のデータセットで
   /// yolo26nをファインチューニングしたカスタムモデル(詳細: docs/model-provenance.md)。
