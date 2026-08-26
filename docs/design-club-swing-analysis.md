@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 実装中(Phase 1完了、Phase 2はコード実装完了・実機検証待ち)
+- ステータス: 実装中(Phase 1・Phase 2完了、Phase 3着手前)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -127,7 +127,7 @@ sidespinRpm = faceToPathDegrees * BallisticsConstants.sidespinRpmPerFaceToPathDe
 
 - **バックスピン量の実測**: 今回は固定仮定値のまま。アタック角・(可能であれば)ロフト角からの推定は将来検討
 - **芯を外した打点(ギア効果)の考慮**: 今回のフェース・トゥ・パスによる曲がり推定は、芯で捉えたショットを前提とした簡易モデル。ミスヒット時の追加サイドスピンは考慮しない
-- **クラブ検出のROI最適化**: 手順2はまずフルフレーム検出で試す想定。実機検証で精度・速度が不十分な場合、ボールと同様のROIクロップ方式の導入を検討する
+- **クラブ検出のROI最適化**: 手順2はまずフルフレーム検出で試す想定。実機検証で精度・速度が不十分な場合、ボールと同様のROIクロップ方式の導入を検討する(Phase 2実機検証で、ダウンスイング〜インパクト直前に検出欠測が確認されたため、Phase 4以降で優先度を再評価する。詳細はセクション10参照)
 
 ## 10. リスク・フォールバック方針
 
@@ -139,6 +139,16 @@ sidespinRpm = faceToPathDegrees * BallisticsConstants.sidespinRpmPerFaceToPathDe
 - Golf Driver Trackerのデータセットの一部を自分でOBBアノテーションし直す(要ブラウザでのアノテーション作業)
 
 いずれの場合も、`docs/roboflow-model-investigation-guide.md`と同様の調査手順(候補データセットの重み入手可否・ライセンス確認)を踏む必要がある。
+
+**Phase 2実機検証で確認されたリスク(2026-08-26)**: `ClubDetector`単体をフルフレーム検出(100ms間隔サンプリング)で実機検証したところ、アドレス時(クラブ静止)はhead/handleともに高信頼度(0.83〜0.93)で安定検出できた一方、**スイング動作中、特にユーザーの申告で「ダウンスイング〜インパクト直前」に該当する区間で、最大900ms(9フレーム)連続してhead・handleとも検出0件になる欠測が確認された**(全56フレーム中、head検出30件・handle検出39件)。
+
+原因はモーションブラーの可能性が高いと考えられる。クラブヘッド速度はインパクト直前に最大(ドライバーで秒速40〜50m程度)になり、これはセクション1でボール追跡が破綻した理由(高速移動による検出困難)と同種の物理的限界がクラブヘッドにも及んでいることを示唆する。ROIクロップ(セクション9)は探索範囲の絞り込みには有効だが、モーションブラー自体(シャッタースピード起因)は解消しない可能性がある点に注意。
+
+**対応方針(2026-08-26、ユーザー確認済み)**: この場での設計変更は行わず、**現状のフルフレーム検出のままPhase 3に進む**。ただし以下を前提としてPhase 3以降を実装する。
+
+- `club_path_estimator.dart`・`impact_moment_detector.dart`は、インパクト直前に理想的な5フレーム分のデータが揃わない(場合によっては大部分欠測する)ケースを前提に、**取得できたデータ点数だけで成立するロバストな実装**とする(必要最小点数を下回った場合のみ例外を投げる)
+- 実際の精度への影響度は、Phase 4のオーケストレーション結線後、実データでの結果を見て判断する
+- 精度が実用に耐えないと判明した場合は、ROIクロップ方式の導入(セクション9)、またはこのセクションのOBBベースのフォールバックを再検討する
 
 ## 11. 実装TODOリスト(Phase別)
 
@@ -164,11 +174,15 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 - [x] `.mlpackage`をZIP化して`assets/models/`に配置、`pubspec.yaml`更新
 - [x] `lib/data/ml/club_detector.dart`を実装(`BallDetector`と同様の構造)
 - [x] `docs/model-provenance.md`にクラブ検出モデルの出典・ライセンス(CC BY 4.0)を追記
-- [ ] Phase完了確認: 実機で`ClubDetector`単体がクラブヘッド・ハンドルを検出できることを確認
+- [x] Phase完了確認: 実機で`ClubDetector`単体がクラブヘッド・ハンドルを検出できることを確認
 
-**進捗(2026-08-26)**: Roboflowデータセットダウンロード・Colabでのファインチューニングはユーザー作業として完了(手順は新設の[club-detector-training-guide.md](club-detector-training-guide.md)にまとめた)。学習済みモデルの検出クラスは`golf ball`・`golf club-handle`・`golf club-head`の3クラスで、本アプリでは`golf club-head`・`golf club-handle`のみを`club_detector.dart`で使用(ボール検出は引き続き別モデル`ball_detector.dart`が担当)。モデルは`assets/models/best_club.mlpackage.zip`として配置。学習成果物のうち`best.pt`・`best.tflite`・`last.pt`はリポジトリには含めず(ボール検出モデルと同じ方針)、ユーザーの手元に保管。`fvm flutter analyze`・`fvm flutter test`(53件)は問題なし。実機での`ClubDetector`単体動作確認は未実施(ユーザー側での確認待ち)。
+**完了(2026-08-26)**: Roboflowデータセットダウンロード・Colabでのファインチューニングはユーザー作業として完了(手順は新設の[club-detector-training-guide.md](club-detector-training-guide.md)にまとめた)。学習済みモデルの検出クラスは`golf ball`・`golf club-handle`・`golf club-head`の3クラスで、本アプリでは`golf club-head`・`golf club-handle`のみを`club_detector.dart`で使用(ボール検出は引き続き別モデル`ball_detector.dart`が担当)。モデルは`assets/models/best_club.mlpackage.zip`として配置。学習成果物のうち`best.pt`・`best.tflite`・`last.pt`はリポジトリには含めず(ボール検出モデルと同じ方針)、ユーザーの手元に保管。`fvm flutter analyze`・`fvm flutter test`(53件)は問題なし。
+
+実機検証(iPhone 15 Proシミュレータ、使い捨てデバッグ画面`lib/features/club_detector_debug/`経由)で、head・handleともに検出できることを確認した。ただし**ダウンスイング〜インパクト直前で検出欠測が確認された**(詳細・対応方針はセクション10参照)。この欠測を許容してPhase 3に進む方針をユーザーと確認済み。デバッグ画面は`ClubSwingAnalysisService`(Phase 4)実装後に削除予定。
 
 ### Phase 3: クラブパス・インパクト検出・スピン推定ロジック(純粋関数)
+
+**注意(2026-08-26、Phase 2実機検証結果を踏まえて追記)**: セクション10に記載の通り、実機ではダウンスイング〜インパクト直前のクラブヘッド検出に欠測が発生しうる。`club_path_estimator.dart`・`impact_moment_detector.dart`は、理想的な5フレーム分のデータが揃わないケース(取得できたデータ点数が少ない場合)でも成立するように実装し、必要最小点数を下回った場合のみ例外を投げる設計とする。
 
 - [ ] `lib/domain/services/club_path_estimator.dart`を実装+単体テスト(TDD)
 - [ ] `lib/domain/services/impact_moment_detector.dart`を実装+単体テスト(TDD)
