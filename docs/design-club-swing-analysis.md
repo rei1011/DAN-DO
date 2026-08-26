@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 実装中(Phase 1・Phase 2完了、Phase 3着手前)
+- ステータス: 実装中(Phase 1〜Phase 3完了、Phase 4着手前)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -184,10 +184,18 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 
 **注意(2026-08-26、Phase 2実機検証結果を踏まえて追記)**: セクション10に記載の通り、実機ではダウンスイング〜インパクト直前のクラブヘッド検出に欠測が発生しうる。`club_path_estimator.dart`・`impact_moment_detector.dart`は、理想的な5フレーム分のデータが揃わないケース(取得できたデータ点数が少ない場合)でも成立するように実装し、必要最小点数を下回った場合のみ例外を投げる設計とする。
 
-- [ ] `lib/domain/services/club_path_estimator.dart`を実装+単体テスト(TDD)
-- [ ] `lib/domain/services/impact_moment_detector.dart`を実装+単体テスト(TDD)
-- [ ] `lib/domain/services/spin_estimator.dart`を実装+単体テスト(TDD)
-- [ ] Phase完了確認: `fvm flutter test`が通ることを確認
+- [x] `lib/domain/services/club_path_estimator.dart`を実装+単体テスト(TDD)
+- [x] `lib/domain/services/impact_moment_detector.dart`を実装+単体テスト(TDD)
+- [x] `lib/domain/services/spin_estimator.dart`を実装+単体テスト(TDD)
+- [x] Phase完了確認: `fvm flutter test`が通ることを確認
+
+**完了(2026-08-26)**: 3つの純粋関数サービスをTDDで実装した。
+
+- `ClubPathEstimator.estimate()`: `LaunchParameterEstimator`と同様に`LinearRegression.slope`を使い、クラブヘッド世界座標列(`TrajectoryPoint`)からクラブパス角度・アタック角度を算出。必要最小点数は2点(`LaunchParameterEstimator`と同じ閾値)で、それ未満は`ArgumentError`。
+- `ImpactMomentDetector.detect()`: クラブヘッド検出列(`RawClubDetection`、時刻降順・昇順どちらでも可、内部でソート)とアドレス時ボール位置から、「アドレス位置から最も離れた点(バックスイングのピーク)」を求め、その後の観測点の中で最もアドレス位置に近い点をインパクトフレームとして返す。検出2点未満は`ArgumentError`、ピークが最後の観測点(復帰が一切観測できない)場合は`StateError`。
+- `SpinEstimator.estimateSidespinRpm()`: `launchDirectionDegrees - clubPathDegrees`(フェース・トゥ・パス)に`BallisticsConstants.sidespinRpmPerFaceToPathDegree`を掛けるだけの単純な換算式。
+
+新規テスト11件を追加(`club_path_estimator_test.dart`3件、`impact_moment_detector_test.dart`4件、`spin_estimator_test.dart`3件、うち2件は上記+2点ちょうどでも算出できることを確認するロバスト性テストを含む)。`fvm flutter test`は既存53件+新規11件の計64件が全てパス、`fvm flutter analyze`もPhase 3変更分に起因する指摘は0件(既存の`ball_detector.dart`の`unnecessary_import`指摘のみ残存、Phase 3範囲外)。
 
 ### Phase 4: ClubSwingAnalysisServiceの実装(オーケストレーション)
 
