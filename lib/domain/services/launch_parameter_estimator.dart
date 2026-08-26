@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../core/linear_regression.dart';
 import '../models/trajectory_point.dart';
 
 /// インパクト直後の観測点列(X(t),Y(t),Z(t))を線形回帰し、
@@ -20,9 +21,9 @@ class LaunchParameterEstimator {
       );
     }
 
-    final vx = _linearRegressionSlope(points.map((p) => (p.t, p.x)).toList());
-    final vy = _linearRegressionSlope(points.map((p) => (p.t, p.y)).toList());
-    final vz = _linearRegressionSlope(points.map((p) => (p.t, p.z)).toList());
+    final vx = LinearRegression.slope(points.map((p) => (p.t, p.x)).toList());
+    final vy = LinearRegression.slope(points.map((p) => (p.t, p.y)).toList());
+    final vz = LinearRegression.slope(points.map((p) => (p.t, p.z)).toList());
 
     final v0 = math.sqrt(vx * vx + vy * vy + vz * vz);
     final horizontalSpeed = math.sqrt(vx * vx + vz * vz);
@@ -34,24 +35,5 @@ class LaunchParameterEstimator {
       launchAngleDegrees: launchAngleDegrees,
       launchDirectionDegrees: launchDirectionDegrees,
     );
-  }
-
-  /// 最小二乗法による単回帰の傾き(=速度)を算出する。
-  static double _linearRegressionSlope(List<(double, double)> samples) {
-    final n = samples.length;
-    final sumT = samples.fold<double>(0, (sum, s) => sum + s.$1);
-    final sumV = samples.fold<double>(0, (sum, s) => sum + s.$2);
-    final meanT = sumT / n;
-    final meanV = sumV / n;
-
-    var numerator = 0.0;
-    var denominator = 0.0;
-    for (final (t, v) in samples) {
-      numerator += (t - meanT) * (v - meanV);
-      denominator += (t - meanT) * (t - meanT);
-    }
-
-    if (denominator == 0) return 0;
-    return numerator / denominator;
   }
 }

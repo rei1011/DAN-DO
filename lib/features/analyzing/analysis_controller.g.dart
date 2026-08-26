@@ -16,7 +16,7 @@ final class AnalysisControllerProvider
     extends $AsyncNotifierProvider<AnalysisController, ShotResult> {
   AnalysisControllerProvider._({
     required AnalysisControllerFamily super.from,
-    required (XFile, Offset) super.argument,
+    required (XFile, Offset, ClubType) super.argument,
   }) : super(
          retry: analysisRetryPolicy,
          name: r'analysisControllerProvider',
@@ -51,7 +51,7 @@ final class AnalysisControllerProvider
 }
 
 String _$analysisControllerHash() =>
-    r'6a666fc3612644edbced38091c17f7c8dcf55437';
+    r'825c75355370660fb486f6b7b096e4af699b625a';
 
 final class AnalysisControllerFamily extends $Family
     with
@@ -60,7 +60,7 @@ final class AnalysisControllerFamily extends $Family
           AsyncValue<ShotResult>,
           ShotResult,
           FutureOr<ShotResult>,
-          (XFile, Offset)
+          (XFile, Offset, ClubType)
         > {
   AnalysisControllerFamily._()
     : super(
@@ -71,22 +71,30 @@ final class AnalysisControllerFamily extends $Family
         isAutoDispose: true,
       );
 
-  AnalysisControllerProvider call(XFile video, Offset initialBallPositionPx) =>
-      AnalysisControllerProvider._(
-        argument: (video, initialBallPositionPx),
-        from: this,
-      );
+  AnalysisControllerProvider call(
+    XFile video,
+    Offset initialBallPositionPx,
+    ClubType clubType,
+  ) => AnalysisControllerProvider._(
+    argument: (video, initialBallPositionPx, clubType),
+    from: this,
+  );
 
   @override
   String toString() => r'analysisControllerProvider';
 }
 
 abstract class _$AnalysisController extends $AsyncNotifier<ShotResult> {
-  late final _$args = ref.$arg as (XFile, Offset);
+  late final _$args = ref.$arg as (XFile, Offset, ClubType);
   XFile get video => _$args.$1;
   Offset get initialBallPositionPx => _$args.$2;
+  ClubType get clubType => _$args.$3;
 
-  FutureOr<ShotResult> build(XFile video, Offset initialBallPositionPx);
+  FutureOr<ShotResult> build(
+    XFile video,
+    Offset initialBallPositionPx,
+    ClubType clubType,
+  );
   @$mustCallSuper
   @override
   WhenComplete runBuild() {
@@ -99,6 +107,9 @@ abstract class _$AnalysisController extends $AsyncNotifier<ShotResult> {
               Object?,
               Object?
             >;
-    return element.handleCreate(ref, () => build(_$args.$1, _$args.$2));
+    return element.handleCreate(
+      ref,
+      () => build(_$args.$1, _$args.$2, _$args.$3),
+    );
   }
 }

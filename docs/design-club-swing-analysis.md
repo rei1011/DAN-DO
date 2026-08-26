@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 設計承認済み・実装未着手
+- ステータス: 実装中(Phase 1完了、Phase 2着手前)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -148,12 +148,14 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 
 ### Phase 1: 基盤整備(共通ユーティリティ・定数・モデル定義)
 
-- [ ] `lib/core/linear_regression.dart`を新設し、`LaunchParameterEstimator._linearRegressionSlope`をここに切り出す(既存の`launch_parameter_estimator_test.dart`が通ることを確認)
-- [ ] `lib/core/club_constants.dart`を新設(`ClubType` enumとスマッシュファクター表)
-- [ ] `lib/core/ballistics_constants.dart`に`sidespinRpmPerFaceToPathDegree`を追加
-- [ ] `lib/domain/models/raw_club_detection.dart`を新設(`ClubPart` enum: head/handle)
-- [ ] `lib/domain/services/shot_analysis_service.dart`の`analyze()`に`required ClubType clubType`を追加(既存`BallTrajectoryAnalysisService`側も引数を受け取るだけに更新してビルドを通す)
-- [ ] Phase完了確認: `fvm flutter analyze`・`fvm flutter test`が通ることを確認
+- [x] `lib/core/linear_regression.dart`を新設し、`LaunchParameterEstimator._linearRegressionSlope`をここに切り出す(既存の`launch_parameter_estimator_test.dart`が通ることを確認)
+- [x] `lib/core/club_constants.dart`を新設(`ClubType` enumとスマッシュファクター表)
+- [x] `lib/core/ballistics_constants.dart`に`sidespinRpmPerFaceToPathDegree`を追加
+- [x] `lib/domain/models/raw_club_detection.dart`を新設(`ClubPart` enum: head/handle)
+- [x] `lib/domain/services/shot_analysis_service.dart`の`analyze()`に`required ClubType clubType`を追加(既存`BallTrajectoryAnalysisService`側も引数を受け取るだけに更新してビルドを通す)
+- [x] Phase完了確認: `fvm flutter analyze`・`fvm flutter test`が通ることを確認
+
+**完了(2026-08-26、[PR #12](https://github.com/rei1011/DAN-DO/pull/12))**: `analyze()`のシグネチャ変更に伴い、設計時点では想定していなかった呼び出し元(`AnalysisController`・`AnalyzingScreen`・`BallPositionPickerScreen`)とそのテストもビルドを通すため追従修正した。クラブ種別選択UIはまだ無いため、`BallPositionPickerScreen`は暫定的に`ClubType.driver`固定値を渡している(`TODO(Phase5)`コメント付き、Phase 5で実際の選択UIに置き換え予定)。アプリの実行時挙動(解析ロジック・画面遷移)はPhase 1では変化していない。
 
 ### Phase 2: クラブ検出モデルの学習・組み込み
 

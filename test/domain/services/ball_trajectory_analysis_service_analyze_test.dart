@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cross_file/cross_file.dart';
+import 'package:dan_do/core/club_constants.dart';
 import 'package:dan_do/core/roi_constants.dart';
 import 'package:dan_do/core/tracking_constants.dart';
 import 'package:dan_do/data/ml/ball_detector.dart';
@@ -176,6 +177,7 @@ void main() {
       final result = await service.analyze(
         XFile('fixture.mp4'),
         initialBallPositionPx: initialBallPositionPx,
+        clubType: ClubType.driver,
       );
 
       // 呼び出し回数: 最初はinitialCropSizePx(240)、
@@ -271,6 +273,7 @@ void main() {
         await service.analyze(
           XFile('fixture.mp4'),
           initialBallPositionPx: initialBallPositionPx,
+          clubType: ClubType.driver,
         );
       } on InsufficientTrajectoryDataException {
         // 想定内: 静止シナリオでは飛球区間が発生しない。
@@ -353,6 +356,7 @@ void main() {
       final result = await service.analyze(
         XFile('fixture.mp4'),
         initialBallPositionPx: initialBallPositionPx,
+        clubType: ClubType.driver,
       );
 
       expect(detector.callWidths, hasLength(totalCalls));
@@ -442,6 +446,7 @@ void main() {
         await service.analyze(
           XFile('fixture.mp4'),
           initialBallPositionPx: initialBallPositionPx,
+          clubType: ClubType.driver,
         );
       } on InsufficientTrajectoryDataException {
         // 想定内: 静止シナリオでは飛球区間が発生しない。

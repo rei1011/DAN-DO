@@ -2,6 +2,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../core/club_constants.dart';
 import '../../domain/models/shot_result.dart';
 import '../result/result_screen.dart';
 import 'analysis_controller.dart';
@@ -11,14 +12,20 @@ class AnalyzingScreen extends ConsumerWidget {
     super.key,
     required this.video,
     required this.initialBallPositionPx,
+    required this.clubType,
   });
 
   final XFile video;
   final Offset initialBallPositionPx;
+  final ClubType clubType;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = analysisControllerProvider(video, initialBallPositionPx);
+    final provider = analysisControllerProvider(
+      video,
+      initialBallPositionPx,
+      clubType,
+    );
 
     ref.listen<AsyncValue<ShotResult>>(provider, (previous, next) {
       next.whenOrNull(

@@ -86,7 +86,13 @@ void main() {
         _detection(frameTimeMs: 0, u: 100, v: 100, diameterPx: 28),
         _detection(frameTimeMs: 33, u: 100, v: 100, diameterPx: 28),
         // 近くにある小さなノイズ候補(実際のボールの1/5程度のサイズ)
-        _detection(frameTimeMs: 66, u: 130, v: 100, diameterPx: 5, confidence: 0.4),
+        _detection(
+          frameTimeMs: 66,
+          u: 130,
+          v: 100,
+          diameterPx: 5,
+          confidence: 0.4,
+        ),
         _detection(frameTimeMs: 99, u: 100, v: 100, diameterPx: 28),
       ];
 
@@ -133,29 +139,26 @@ void main() {
       expect(result.cursor.hasLaunched, isFalse);
     });
 
-    test(
-      'referencePositionPxが指定されている場合、信頼度が最高でなくても'
-      'その位置に最も近い候補で追跡を開始する',
-      () {
-        const tracker = BallKalmanTracker();
-        final candidates = [
-          // ユーザーがタップした位置から遠い、背景の別物体(信頼度は高い)
-          _detection(frameTimeMs: 0, u: 200, v: 200, confidence: 0.9),
-          // タップ位置に近い、本来の対象(信頼度はやや低い)
-          _detection(frameTimeMs: 0, u: 101, v: 99, confidence: 0.7),
-        ];
+    test('referencePositionPxが指定されている場合、信頼度が最高でなくても'
+        'その位置に最も近い候補で追跡を開始する', () {
+      const tracker = BallKalmanTracker();
+      final candidates = [
+        // ユーザーがタップした位置から遠い、背景の別物体(信頼度は高い)
+        _detection(frameTimeMs: 0, u: 200, v: 200, confidence: 0.9),
+        // タップ位置に近い、本来の対象(信頼度はやや低い)
+        _detection(frameTimeMs: 0, u: 101, v: 99, confidence: 0.7),
+      ];
 
-        final result = tracker.step(
-          cursor: null,
-          candidatesAtFrame: candidates,
-          frameTimeMs: 0,
-          referencePositionPx: const Offset(100, 100),
-        );
+      final result = tracker.step(
+        cursor: null,
+        candidatesAtFrame: candidates,
+        frameTimeMs: 0,
+        referencePositionPx: const Offset(100, 100),
+      );
 
-        expect(result.state.u, 101);
-        expect(result.state.v, 99);
-      },
-    );
+      expect(result.state.u, 101);
+      expect(result.state.v, 99);
+    });
 
     test('cursorがnullかつ信頼度条件を満たす候補が無い場合はArgumentErrorを投げる', () {
       const tracker = BallKalmanTracker(confidenceThreshold: 0.5);
