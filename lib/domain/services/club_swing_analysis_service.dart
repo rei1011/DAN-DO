@@ -1,9 +1,9 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 import 'dart:ui' as ui;
 
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../core/assumed_camera_intrinsics.dart';
@@ -108,6 +108,13 @@ class ClubSwingAnalysisService implements ShotAnalysisService {
       diameterPx: addressDetection.diameterPx,
       focalLengthPx: focalLengthPx,
     );
+    debugPrint(
+      '[diag-club-swing] address originPx=$originPx '
+      'diameterPx=${addressDetection.diameterPx.toStringAsFixed(1)} '
+      'confidence=${addressDetection.confidence.toStringAsFixed(2)} '
+      'referenceDepthMeters=${referenceDepthMeters.toStringAsFixed(2)} '
+      'focalLengthPx=${focalLengthPx.toStringAsFixed(1)}',
+    );
 
     // 2. クラブヘッド・ハンドル追跡: 動画全体をフルフレーム検出する。
     final clubDetections = <RawClubDetection>[];
@@ -137,6 +144,11 @@ class ClubSwingAnalysisService implements ShotAnalysisService {
     } on StateError {
       throw const ClubSwingAnalysisException('インパクトの瞬間を特定できませんでした');
     }
+    debugPrint(
+      '[diag-club-swing] headDetections=${headDetections.length} '
+      'handleDetections=${clubDetections.where((d) => d.part == ClubPart.handle).length} '
+      'impactFrameTimeMs=$impactFrameTimeMs',
+    );
 
     // 4. クラブパス・アタック角・クラブヘッド速度の算出。
     final shaftLengthMeters = ClubConstants.shaftLengthMeters[clubType]!;
@@ -189,28 +201,32 @@ class ClubSwingAnalysisService implements ShotAnalysisService {
     } on ArgumentError {
       throw const ClubSwingAnalysisException('クラブパスを算出できませんでした');
     }
+    debugPrint(
+      '[diag-club-swing] regressionPoints=${clubHeadTrajectory.length} '
+      'clubPathDegrees=${clubPath.clubPathDegrees.toStringAsFixed(1)} '
+      'attackAngleDegrees=${clubPath.attackAngleDegrees.toStringAsFixed(1)} '
+      'clubHeadSpeedMetersPerSecond=${clubHeadSpeedMetersPerSecond.toStringAsFixed(1)}',
+    );
 
-    // 5. インパクト直後のボール検出(範囲限定)。
-    final launchDetections = <RawBallDetection>[];
-    for (var i = 0; i < RoiConstants.postImpactBallSearchFrameCount; i++) {
-      final t = Duration(milliseconds: impactFrameTimeMs) + frameInterval * i;
-      if (t >= duration) {
-        break;
-      }
-      final frameBytes = await frameSource.frameAt(t);
-      final cropped = await FrameCropper.crop(
-        frameBytes,
-        centerPx: originPx,
-        cropSizePx: RoiConstants.postImpactBallSearchCropSizePx,
-      );
-      final rawDetections = await ballDetector.detect(
-        cropped.bytes,
-        frameTime: t,
-      );
-      launchDetections.addAll(
-        rawDetections
-            .where((d) => d.confidence >= TrackingConstants.confidenceThreshold)
-            .map((d) => FrameCropper.translateDetection(d, cropped.offsetPx)),
+    // 5. インパクト直後のボール検出(範囲限定)。狭いクロップで検出不足の場合、
+    // 低カメラアングル・近距離設置などでボールが探索範囲外に出るケースを
+    // 想定し、1回だけ広いクロップ(実質フルフレーム)で再探索する。
+    var launchDetections = await _searchPostImpactBall(
+      frameSource: frameSource,
+      impactFrameTimeMs: impactFrameTimeMs,
+      duration: duration,
+      originPx: originPx,
+      cropSizePx: RoiConstants.postImpactBallSearchCropSizePx,
+      referenceDiameterPx: addressDetection.diameterPx,
+    );
+    if (launchDetections.length < 2) {
+      launchDetections = await _searchPostImpactBall(
+        frameSource: frameSource,
+        impactFrameTimeMs: impactFrameTimeMs,
+        duration: duration,
+        originPx: originPx,
+        cropSizePx: RoiConstants.postImpactBallSearchFallbackCropSizePx,
+        referenceDiameterPx: addressDetection.diameterPx,
       );
     }
 
@@ -240,6 +256,12 @@ class ClubSwingAnalysisService implements ShotAnalysisService {
 
     // 6. 打ち出し方向・角度算出(v0はクラブヘッド速度由来のため使わない)。
     final launchParams = LaunchParameterEstimator.estimate(measuredTrajectory);
+    debugPrint(
+      '[diag-club-swing] measuredTrajectory='
+      '${measuredTrajectory.map((p) => "(t=${p.t.toStringAsFixed(3)},x=${p.x.toStringAsFixed(2)},y=${p.y.toStringAsFixed(2)},z=${p.z.toStringAsFixed(2)})").join(" ")} '
+      'launchAngleDegrees=${launchParams.launchAngleDegrees.toStringAsFixed(1)} '
+      'launchDirectionDegrees=${launchParams.launchDirectionDegrees.toStringAsFixed(1)}',
+    );
 
     // 7. 曲がり量(サイドスピン)算出。
     final sidespinRpm = SpinEstimator.estimateSidespinRpm(
@@ -271,6 +293,61 @@ class ClubSwingAnalysisService implements ShotAnalysisService {
       measuredTrajectory: measuredTrajectory,
       simulatedTrajectory: simulatedTrajectory,
     );
+  }
+
+  /// インパクトフレームから[RoiConstants.postImpactBallSearchFrameCount]分、
+  /// [cropSizePx]のクロップでボールを探索する。
+  ///
+  /// [referenceDiameterPx](アドレス時のボール直径)に対して
+  /// [TrackingConstants.minDiameterRatio]〜[TrackingConstants.maxDiameterRatio]の
+  /// 範囲外の検出候補は、無関係な物体(地面に転がる他のボール等)とみなして除外する。
+  /// 実機検証で、探索範囲を広げた際に手前の無関係なボールを誤検出し、静止した
+  /// 物体を打ち出し軌道として扱ってしまう事象が確認されたための対策(Phase6)。
+  Future<List<RawBallDetection>> _searchPostImpactBall({
+    required VideoFrameSource frameSource,
+    required int impactFrameTimeMs,
+    required Duration duration,
+    required Offset originPx,
+    required double cropSizePx,
+    required double referenceDiameterPx,
+  }) async {
+    final minDiameterPx =
+        TrackingConstants.minDiameterRatio * referenceDiameterPx;
+    final maxDiameterPx =
+        TrackingConstants.maxDiameterRatio * referenceDiameterPx;
+    final detections = <RawBallDetection>[];
+    for (var i = 0; i < RoiConstants.postImpactBallSearchFrameCount; i++) {
+      final t = Duration(milliseconds: impactFrameTimeMs) + frameInterval * i;
+      if (t >= duration) {
+        break;
+      }
+      final frameBytes = await frameSource.frameAt(t);
+      final cropped = await FrameCropper.crop(
+        frameBytes,
+        centerPx: originPx,
+        cropSizePx: cropSizePx,
+      );
+      final rawDetections = await ballDetector.detect(
+        cropped.bytes,
+        frameTime: t,
+      );
+      detections.addAll(
+        rawDetections
+            .where((d) => d.confidence >= TrackingConstants.confidenceThreshold)
+            .where(
+              (d) =>
+                  d.diameterPx >= minDiameterPx &&
+                  d.diameterPx <= maxDiameterPx,
+            )
+            .map((d) => FrameCropper.translateDetection(d, cropped.offsetPx)),
+      );
+    }
+    debugPrint(
+      '[diag-club-swing] postImpactSearch cropSizePx=${cropSizePx.toStringAsFixed(0)} '
+      'originPx=$originPx found=${detections.length} '
+      '${detections.map((d) => "(t=${d.frameTimeMs}ms,center=${d.centerPx},diam=${d.diameterPx.toStringAsFixed(1)},conf=${d.confidence.toStringAsFixed(2)})").join(" ")}',
+    );
+    return detections;
   }
 
   static RawBallDetection? _bestConfidence(Iterable<RawBallDetection> ds) {
