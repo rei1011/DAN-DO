@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "Bash(dart format *)",
+      "Bash(flutter test *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "cd \"$(git rev-parse --show-toplevel)\" && dart format . 2>&1 | tail -5",
+            "statusMessage": "PR作成前にdart formatを実行中..."
+          }
+        ]
+      }
+    ]
+  }
+}
