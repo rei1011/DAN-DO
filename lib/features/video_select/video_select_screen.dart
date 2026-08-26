@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../data/video/image_picker_video_picker.dart';
 import '../../data/video/video_player_duration_reader.dart';
 import '../ball_position/ball_position_picker_screen.dart';
+import '../club_detector_debug/club_detector_debug_screen.dart';
 
 class VideoSelectScreen extends ConsumerStatefulWidget {
   const VideoSelectScreen({super.key});
@@ -77,6 +78,20 @@ class _VideoSelectScreenState extends ConsumerState<VideoSelectScreen> {
               const SizedBox(height: 16),
               Text(_errorMessage!, key: const Key('videoSelectErrorText')),
             ],
+            // Phase 2実機検証用の一時的なデバッグ導線。ClubSwingAnalysisService
+            // (Phase 4)実装後は不要になるため、検証完了後に削除してよい。
+            const SizedBox(height: 32),
+            TextButton(
+              key: const Key('clubDetectorDebugButton'),
+              onPressed: () {
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (_) => const ClubDetectorDebugScreen(),
+                  ),
+                );
+              },
+              child: const Text('[デバッグ] クラブ検出テスト'),
+            ),
           ],
         ),
       ),
