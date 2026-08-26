@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 実装中(Phase 1〜Phase 3完了、Phase 4着手前)
+- ステータス: 実装中(Phase 1〜Phase 4完了、Phase 5着手前)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -80,7 +80,8 @@ flowchart TD
 | `lib/domain/services/impact_moment_detector.dart` | 新規(純粋関数) | クラブヘッド位置列とアドレス時ボール位置から、インパクトフレームを推定 |
 | `lib/domain/services/spin_estimator.dart` | 新規(純粋関数) | 打ち出し方向とクラブパスの差(フェース・トゥ・パス)からサイドスピン量(rpm)を換算 |
 | `lib/domain/services/club_swing_analysis_service.dart` | 新規 | `ShotAnalysisService`の別実装。上記を結線するオーケストレーション層 |
-| `lib/core/club_constants.dart` | 新規 | クラブ種別ごとのスマッシュファクター表 |
+| `lib/core/club_constants.dart` | 新規 | クラブ種別ごとのスマッシュファクター表・想定シャフト長表(Phase4追加)・クラブパス回帰の最大観測点数(Phase4追加) |
+| `lib/core/roi_constants.dart` | 変更(Phase4追加) | インパクト直後のボール探索クロップサイズ・探索フレーム数を追加 |
 | `lib/core/linear_regression.dart` | 新規 | `LaunchParameterEstimator._linearRegressionSlope`を共通ユーティリティとして切り出し、`club_path_estimator.dart`と共用 |
 | `lib/core/ballistics_constants.dart` | 変更 | `sidespinRpmPerFaceToPathDegree`(目安値、要チューニング)を追加 |
 | `lib/domain/services/shot_analysis_service.dart` | 変更 | `analyze()`に`required ClubType clubType`を追加 |
@@ -110,6 +111,18 @@ sidespinRpm = faceToPathDegrees * BallisticsConstants.sidespinRpmPerFaceToPathDe
 | ウェッジ | 1.25 |
 
 **バックスピン量**: 今回のスコープでは真の測定手段が無いため、既存の`BallisticsConstants.assumedBackspinRpm`(固定仮定値)を変更せず流用する。バックスピン推定(≈飛距離・高さの精度向上)は本設計のスコープ外とする(セクション9参照)。
+
+**クラブヘッドの奥行き推定・想定シャフト長表**(`club_constants.dart`、Phase4で判明した制約への対応。詳細はPhase4の完了メモ参照): `RawClubDetection`にはボールの実直径のようなサイズ情報が無いため、単独では奥行き(カメラからの距離)を推定できない。同一フレームで検出したクラブヘッド・ハンドル間の画像上の距離(見かけのシャフト長)と、以下の想定実シャフト長を比較し、ボールの実直径と同じピンホールカメラの原理で奥行きを推定する。
+
+| クラブ種別 | 想定シャフト長(m、目安) |
+|---|---|
+| ドライバー | 1.145 |
+| フェアウェイウッド | 1.09 |
+| ユーティリティ | 1.02 |
+| アイアン(中番手目安) | 0.95 |
+| ウェッジ | 0.89 |
+
+この方式はhead・handleが同一フレームで両方検出できた場合のみ算出可能なため、Phase2実機検証で確認された検出欠測(セクション10)の影響を強く受ける。クラブパス・アタック角の回帰には、インパクト以前でhead・handleが揃った点のうち直近`ClubConstants.maxPathRegressionFrames`(目安値5)点までを使う。
 
 ## 7. UI変更
 
@@ -199,9 +212,24 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 
 ### Phase 4: ClubSwingAnalysisServiceの実装(オーケストレーション)
 
-- [ ] `lib/domain/services/club_swing_analysis_service.dart`を実装し、Phase 1〜3の要素を結線
-- [ ] `ball_trajectory_analysis_service_analyze_test.dart`を参考に、モックを使った結線テストを作成
-- [ ] Phase完了確認: `fvm flutter test`が通ることを確認
+- [x] `lib/domain/services/club_swing_analysis_service.dart`を実装し、Phase 1〜3の要素を結線
+- [x] `ball_trajectory_analysis_service_analyze_test.dart`を参考に、モックを使った結線テストを作成
+- [x] Phase完了確認: `fvm flutter test`が通ることを確認
+
+**完了(2026-08-26)**: `ClubSwingAnalysisService`(`ShotAnalysisService`実装)を新設し、Phase 1〜3の要素を結線した。
+
+**実装前に発覚し、ユーザー確認済みの設計変更点**: セクション4・5では「クラブヘッド世界座標」を`ClubPathEstimator`に渡す想定だったが、`RawClubDetection`(Phase 1で確定済み)には中心座標のみでボールの実直径のようなサイズ情報が無いため、単独では奥行き(カメラからの距離)を推定できないことが判明した。特にダウンザライン撮影(セクション2の前提)では、クラブヘッド速度の大部分を占める「ターゲット方向への前進」成分がカメラ視線軸(奥行き)に沿うため、奥行きを推定できないと「クラブヘッド速度」(手順8で初速算出に必須)も「クラブパスのZ成分」も原理的に測定不能になる。
+
+対応として、**同一フレームで検出したクラブヘッド・ハンドル間の画像上の距離(見かけのシャフト長)と、クラブ種別ごとの想定実シャフト長(`ClubConstants.shaftLengthMeters`、新設)を比較し、ボールの実直径と同じピンホールカメラの原理(`DistanceEstimation.estimateWorldPosition`)で奥行きを推定する**方式を採用した(ユーザー確認済み)。この方式は`DistanceEstimation`のコード変更を伴わず、既存の`ballDiameterMeters`引数にシャフト長を渡すだけで転用できる。ただし精度はボールの直径ほど安定しない可能性がある(head/handleが同一フレームで両方検出できた場合のみ算出可能なため、Phase 2実機検証で確認された欠測(セクション10)の影響を強く受ける)。
+
+**具体的な実装内容**:
+
+- `lib/core/club_constants.dart`に`shaftLengthMeters`(クラブ種別ごとの想定実シャフト長、目安値)と`maxPathRegressionFrames`(クラブパス回帰に使う最大観測点数、目安値5)を追加
+- `lib/core/roi_constants.dart`に`postImpactBallSearchCropSizePx`(インパクト直後のボール探索クロップサイズ、目安値500px)と`postImpactBallSearchFrameCount`(探索フレーム数、目安値5)を追加
+- `ClubSwingAnalysisService.analyze()`の処理順序: (1)タップ位置クロップでアドレス時のボールを検出し奥行き・スケール基準を確立 → (2)動画全体をフルフレームでクラブヘッド・ハンドル検出 → (3)`ImpactMomentDetector`でインパクトフレームを推定 → (4)インパクト以前でhead・handleが同一フレームで揃った点(最大`maxPathRegressionFrames`点)からhead-handle距離ベースで世界座標を算出し、`ClubPathEstimator`(クラブパス・アタック角)と`LaunchParameterEstimator`(`.v0`のみ、クラブヘッド速度として流用)に渡す → (5)インパクトフレームから`postImpactBallSearchFrameCount`フレームのみ広めのクロップでボールを検出 → (6)`LaunchParameterEstimator`(`.launchAngleDegrees`・`.launchDirectionDegrees`のみ、v0は使わない)で打ち出し方向・角度を算出 → (7)`SpinEstimator`でサイドスピン量を換算 → (8)クラブヘッド速度×`ClubConstants.smashFactor`で初速を算出(ボール自身の追跡からのv0は使わない、追跡窓が短すぎて速度推定の信頼性が低いため) → (9)`BallisticsSimulator`で弾道シミュレーション
+- 失敗時は`ClubSwingAnalysisException`を投げる。セクション8記載の3メッセージに加え、「アドレス時のボールを検出できませんでした」「クラブパスを算出できませんでした」を追加(今回発覚したhead-handle依存の制約に伴う新しい失敗経路のため)
+- `BallTrajectoryAnalysisService`と同様、`@riverpod`プロバイダ(`clubSwingAnalysisServiceProvider`)も同ファイルに追加。ただし`shotAnalysisServiceProvider`への切り替えはPhase 5のスコープのため今回は行っていない
+- テスト: `test/domain/services/club_swing_analysis_service_analyze_test.dart`を新設(4件: 正常系1件、異常系3件〈クラブヘッド未検出・アドレス時ボール未検出・インパクト直後ボール検出不足〉)。既存64件と合わせて計68件が全てパス。`fvm flutter analyze`もPhase4変更分に起因する指摘は0件(既存の`ball_detector.dart`の`unnecessary_import`指摘のみ残存、Phase4範囲外)
 
 ### Phase 5: UI統合・既存フローの置き換え
 

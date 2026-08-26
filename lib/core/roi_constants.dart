@@ -13,4 +13,12 @@ class RoiConstants {
   /// この回数だけ連続でROI内に検出が無かった場合、その回だけ全体フレーム
   /// 探索にフォールバックする。
   static const int maxLostFramesBeforeFullFrameFallback = 5;
+
+  /// インパクト直後、限定範囲でボールを探索する際のクロップサイズ(px、正方形の一辺)。
+  /// スロー撮影ではない前提で、想定される最大初速でも探索範囲に収まるよう
+  /// 追跡用クロップより大きめにしている(目安値、要実機検証での調整)。
+  static const double postImpactBallSearchCropSizePx = 500;
+
+  /// インパクトフレームから何フレーム分、限定範囲でボールを探索するか(目安値)。
+  static const int postImpactBallSearchFrameCount = 5;
 }
