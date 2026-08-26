@@ -1,7 +1,7 @@
 # 設計書: クラブ追跡ベースの弾道解析への方式転換
 
 - 作成日: 2026-08-26
-- ステータス: 実装中(Phase 1完了、Phase 2着手前)
+- ステータス: 実装中(Phase 1完了、Phase 2はコード実装完了・実機検証待ち)
 - 前提となる調査: [investigation-custom-model-tracking-failure.md](investigation-custom-model-tracking-failure.md)
 
 ## 1. 背景・目的
@@ -159,12 +159,14 @@ Phaseごとに1つのPRとして完結させる想定。各Phase末尾の完了�
 
 ### Phase 2: クラブ検出モデルの学習・組み込み
 
-- [ ] Golf Driver Tracker(`golf-driver-tracker/2`)のDatasetをRoboflowからダウンロード(YOLO26形式、Show download code)
-- [ ] Colabで`yolo26n`をファインチューニング(club-head/club-handle。手順は`roboflow-model-investigation-guide.md`のノートブック構成を流用)
-- [ ] `.mlpackage`をZIP化して`assets/models/`に配置、`pubspec.yaml`更新
-- [ ] `lib/data/ml/club_detector.dart`を実装(`BallDetector`と同様の構造)
-- [ ] `docs/model-provenance.md`にクラブ検出モデルの出典・ライセンス(CC BY 4.0)を追記
+- [x] Golf Driver Tracker(`golf-driver-tracker/2`)のDatasetをRoboflowからダウンロード(YOLO26形式、Show download code)
+- [x] Colabで`yolo26n`をファインチューニング(club-head/club-handle。手順は`club-detector-training-guide.md`のノートブック構成を流用)
+- [x] `.mlpackage`をZIP化して`assets/models/`に配置、`pubspec.yaml`更新
+- [x] `lib/data/ml/club_detector.dart`を実装(`BallDetector`と同様の構造)
+- [x] `docs/model-provenance.md`にクラブ検出モデルの出典・ライセンス(CC BY 4.0)を追記
 - [ ] Phase完了確認: 実機で`ClubDetector`単体がクラブヘッド・ハンドルを検出できることを確認
+
+**進捗(2026-08-26)**: Roboflowデータセットダウンロード・Colabでのファインチューニングはユーザー作業として完了(手順は新設の[club-detector-training-guide.md](club-detector-training-guide.md)にまとめた)。学習済みモデルの検出クラスは`golf ball`・`golf club-handle`・`golf club-head`の3クラスで、本アプリでは`golf club-head`・`golf club-handle`のみを`club_detector.dart`で使用(ボール検出は引き続き別モデル`ball_detector.dart`が担当)。モデルは`assets/models/best_club.mlpackage.zip`として配置。学習成果物のうち`best.pt`・`best.tflite`・`last.pt`はリポジトリには含めず(ボール検出モデルと同じ方針)、ユーザーの手元に保管。`fvm flutter analyze`・`fvm flutter test`(53件)は問題なし。実機での`ClubDetector`単体動作確認は未実施(ユーザー側での確認待ち)。
 
 ### Phase 3: クラブパス・インパクト検出・スピン推定ロジック(純粋関数)
 

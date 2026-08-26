@@ -86,6 +86,7 @@ flutter:
 
   assets:
     - assets/models/best.mlpackage.zip
+    - assets/models/best_club.mlpackage.zip
 
   # To add assets to your application, add an assets section, like this:
   # assets:
