@@ -16,9 +16,17 @@ class RoiConstants {
 
   /// インパクト直後、限定範囲でボールを探索する際のクロップサイズ(px、正方形の一辺)。
   /// スロー撮影ではない前提で、想定される最大初速でも探索範囲に収まるよう
-  /// 追跡用クロップより大きめにしている(目安値、要実機検証での調整)。
-  static const double postImpactBallSearchCropSizePx = 500;
+  /// 追跡用クロップより大きめにしている(目安値、要実機検証での調整。
+  /// Phase6でPhase5実機検証結果を踏まえ500→800に拡大)。
+  static const double postImpactBallSearchCropSizePx = 800;
 
-  /// インパクトフレームから何フレーム分、限定範囲でボールを探索するか(目安値)。
-  static const int postImpactBallSearchFrameCount = 5;
+  /// インパクトフレームから何フレーム分、限定範囲でボールを探索するか(目安値。
+  /// Phase6でPhase5実機検証結果を踏まえ5→10に拡大)。
+  static const int postImpactBallSearchFrameCount = 10;
+
+  /// [postImpactBallSearchCropSizePx]での探索結果が2点未満だった場合のみ、
+  /// 同じフレーム範囲を1回だけ再探索するフォールバック用クロップサイズ(px)。
+  /// [FrameCropper.crop]は実フレームサイズにクランプするため、通常の動画では
+  /// 実質フルフレーム探索になる(目安値、要実機検証での調整。Phase6新設)。
+  static const double postImpactBallSearchFallbackCropSizePx = 2000;
 }
