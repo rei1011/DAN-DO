@@ -140,9 +140,7 @@ class BallKalmanTracker {
                   ? a
                   : b,
             )
-          : candidates.reduce(
-              (a, b) => a.confidence >= b.confidence ? a : b,
-            );
+          : candidates.reduce((a, b) => a.confidence >= b.confidence ? a : b);
       final newCursor = BallTrackerCursor(
         u: best.centerPx.dx,
         v: best.centerPx.dy,
@@ -173,7 +171,8 @@ class BallKalmanTracker {
     var matchedDistance = double.infinity;
     for (final candidate in candidates) {
       final diameterRatio = candidate.diameterPx / cursor.diameterPx;
-      if (diameterRatio < minDiameterRatio || diameterRatio > maxDiameterRatio) {
+      if (diameterRatio < minDiameterRatio ||
+          diameterRatio > maxDiameterRatio) {
         continue;
       }
       final dx = candidate.centerPx.dx - predictedU;
